@@ -1,0 +1,4242 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl"><head>
+<meta charset="utf-8">
+<!-- v1 pinned maximum-scale=1 and user-scalable=no to keep pinch gestures for
+     Leaflet. It does not need them: Leaflet handles its own pinch inside #map,
+     and the page around it has nothing to zoom away. What the pin actually cost
+     was every reader who enlarges text to read it — in a family whose oldest
+     members are the reason this tree exists. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="x-build" content="">
+<script>
+/* Is this document still the current one?
+ *
+ * The service worker means a relative can be running a copy of this page that
+ * was cached days ago — and a cached document that is BROKEN is the one state
+ * the app cannot get itself out of: every reload serves the same stale copy,
+ * and nothing on screen can say so. That is not hypothetical; it cost an
+ * afternoon on 2026-08-14, with the fix live on the server the whole time and a
+ * phone that could not reach it.
+ *
+ * So: the server stamps each document with a hash of itself on the way out, and
+ * /api/build says what the current stamps are. /api/* is network-only in the
+ * worker, so that answer can never itself be stale. A mismatch means this page
+ * is not the page the server is serving, and the only honest thing to do is
+ * throw away everything cached and come back.
+ *
+ * Three things keep this from being worse than the problem:
+ *
+ *  - **It reloads at most once per stamp**, remembered in sessionStorage. A
+ *    reload loop on a page the family cannot reach any other way would be a far
+ *    worse bug than a stale page.
+ *  - **The SERVER's answer decides, not ours.** A blank stamp used to mean "do
+ *    nothing", and that was backwards: on this site the only thing that serves
+ *    an unstamped document is the worker replaying a copy cached before the
+ *    placeholder existed — which is precisely the stuck phone this exists for,
+ *    and it was the one case the check excused. What keeps a dev file server
+ *    safe is not the blank stamp, it is that nothing there answers /api/build
+ *    with a stamp to disagree with.
+ *  - **It fails silent.** No network, no /api/build, no storage: nothing
+ *    happens. This is a repair path, not a gate.
+ */
+(function () {
+  var el = document.querySelector('meta[name="x-build"]');
+  if (!el) return;
+  var mine = el.getAttribute('content') || '';
+  var which = /\/tree|\/index|\/v2\/tree/.test(location.pathname) ? 'tree' : 'map';
+  fetch('/api/build', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    var now = j && j[which];
+    if (!now || now === mine) return;
+    var key = 'fam.staleReload';
+    try { if (sessionStorage.getItem(key) === now) return; sessionStorage.setItem(key, now); } catch (e) { return; }
+    var done = function () { location.reload(); };
+    var jobs = [];
+    if (window.caches) jobs.push(caches.keys().then(function (ks) {
+      return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+    }));
+    if (navigator.serviceWorker) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+      return Promise.all(rs.map(function (r) { return r.unregister(); }));
+    }));
+    Promise.all(jobs).then(done, done);
+  }).catch(function () {});
+}());
+</script>
+
+<title>המשפחה על המפה</title>
+<meta name="theme-color" content="#f5ead8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17150f" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+<link rel="manifest" href="/icons/site.webmanifest">
+<meta name="apple-mobile-web-app-title" content="המשפחה">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/app/v2-base.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>/* Roobert Hebrew — carries Hebrew AND Latin, so it
+   leads the body stack. Caprasimo stays for Latin display headings (its
+   unicode-range never claimed Hebrew), and Roobert catches the Hebrew ones. */
+@font-face {
+  font-family: 'Roobert Hebrew';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/roobert-hebrew.woff2") format('woff2');
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Caprasimo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/e633cf87-1f93-4b26-84ea-36151a6d53e2.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Caprasimo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/c1a9480a-2198-4214-957b-2c1ce966fb55.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>/* Organic — design-system tokens and component classes. This file is the source of truth for the system's look; retune it here and see readme.md. */
+/* latin-ext */
+@font-face {
+  font-family: 'Caprasimo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/e633cf87-1f93-4b26-84ea-36151a6d53e2.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Caprasimo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/c1a9480a-2198-4214-957b-2c1ce966fb55.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/app/fc0611f7-c93c-499b-91ff-076258b628aa.woff2") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/app/3d57f3dc-3acf-4b28-8de9-0fb5f31a0b37.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+:root {
+  --color-bg: #f5ead8;
+  --color-surface: #ebddc5;
+  --color-text: #201e1d;
+  --color-accent: #c67139;
+  --color-accent-2: #7a8a5e;
+  --color-divider: color-mix(in srgb, #201e1d 16%, transparent);
+
+  /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
+     same step of any role matches the others in visual value. */
+  --color-neutral-100: #f9f4ed;
+  --color-neutral-200: #eee7db;
+  --color-neutral-300: #dcd3c4;
+  --color-neutral-400: #c0b6a5;
+  --color-neutral-500: #a19786;
+  --color-neutral-600: #82796a;
+  --color-neutral-700: #645c50;
+  --color-neutral-800: #474238;
+  --color-neutral-900: #2e2b25;
+
+  --color-accent-100: #fff2eb;
+  --color-accent-200: #ffe1d0;
+  --color-accent-300: #ffc6a5;
+  --color-accent-400: #f6a06b;
+  --color-accent-500: #d67f48;
+  --color-accent-600: #b2622d;
+  --color-accent-700: #8c491a;
+  --color-accent-800: #643312;
+  --color-accent-900: #402310;
+
+  --color-accent-2-100: #f0fae1;
+  --color-accent-2-200: #e1eecc;
+  --color-accent-2-300: #ccdbb2;
+  --color-accent-2-400: #aebf92;
+  --color-accent-2-500: #8fa073;
+  --color-accent-2-600: #728157;
+  --color-accent-2-700: #56633f;
+  --color-accent-2-800: #3d472b;
+  --color-accent-2-900: #272e1b;
+
+  --font-heading: "Caprasimo", "Roobert Hebrew", system-ui, sans-serif;
+  --font-heading-weight: 400;
+  --font-body: "Roobert Hebrew", "Figtree", system-ui, sans-serif;
+
+  --space-1: 4.4px;
+  --space-2: 8.8px;
+  --space-3: 13.2px;
+  --space-4: 17.6px;
+  --space-6: 26.4px;
+  --space-8: 35.2px;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 28px;
+
+  /* Elevation — derived from the ground: soft ink-tinted shadows on a
+     light theme, a hairline edge + ambient darkness on a dark one. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2e2b25 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2e2b25 22%, transparent);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+h1, h2, h3, h4 { font-family: var(--font-heading); font-weight: var(--font-heading-weight); }
+
+.washed{filter:saturate(0.6) contrast(0.85) brightness(1.1) opacity(0.94)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Components — built with the tokens above. Plain CSS
+   on plain HTML: no JavaScript, no build step. Each class is documented in
+   readme.md and demonstrated in foundations/ and components/.
+   ══════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-size: 15px; line-height: 1.55; font-weight: 400; }
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  line-height: 1.12; letter-spacing: -0.015em; margin: 0 0 var(--space-2);
+}
+h1 { font-size: 42px; }
+h2 { font-size: 32px; }
+h3 { font-size: 25px; }
+h4 { font-size: 20px; }
+h5 { font-size: 16px; }
+h6 { font-size: 13px; }
+h6 { letter-spacing: 0.08em; text-transform: uppercase; }
+p { margin: 0 0 var(--space-3); }
+a { color: var(--color-accent); text-underline-offset: 3px; }
+img { display: block; max-width: 100%; }
+figure { margin: 0; }
+figcaption {
+  font-size: 11px; margin-top: var(--space-1);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+.text-muted { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+
+/* — rules — */
+.hr {
+  height: 1px; border: 0; margin: var(--space-4) 0;
+  background: var(--color-divider);
+}
+
+/* — buttons — */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer; text-decoration: none;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 14px; line-height: 1.2; color: var(--color-text); /* matches the .input's 14px —
+     the pair sits side by side in sign-up rows */
+  background: transparent; border: 1px solid transparent;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border-radius: var(--radius-md);
+}
+.btn svg { display: block; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary { background: var(--color-accent); color: var(--color-bg); }
+.btn-primary:hover { background: var(--color-accent-600); }
+.btn-primary:active { background: var(--color-accent-700); }
+.btn-secondary { border-color: var(--color-divider); }
+.btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.btn-ghost { color: var(--color-accent); padding-inline: var(--space-1); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.btn-icon { width: 36px; height: 36px; padding: 0; }
+.btn-block { width: 100%; margin-top: var(--space-2); }
+
+/* — forms — */
+.field > label {
+  display: block; font-size: 12px; margin-bottom: 5px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+.input {
+  width: 100%; min-height: 36px; padding: 6px 10px; font: inherit;
+  font-size: 14px; color: var(--color-text); caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+}
+.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+textarea.input { min-height: 90px; resize: vertical; }
+.radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.radio input, .seg-opt input {
+  position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
+}
+.radio .dot {
+  width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 1.5px solid var(--color-divider);
+}
+.radio:hover .dot { border-color: var(--color-accent); }
+.radio input:checked + .dot {
+  border-color: var(--color-accent); background: var(--color-accent);
+  box-shadow: inset 0 0 0 4px var(--color-bg);
+}
+.radio input:focus-visible + .dot { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.seg {
+  display: inline-flex; overflow: hidden;
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+}
+.seg-opt {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; font-size: 13px; cursor: pointer;
+}
+.seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
+.seg-opt:has(input:checked) { background: var(--color-accent); color: var(--color-bg); }
+.seg-opt:not(:has(input:checked)):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+/* — cards — */
+.card {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface);
+}
+.card-kicker { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent); }
+.card-title {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 17px; line-height: 1.2;
+}
+.card-body { margin: 0; font-size: 13px; opacity: 0.8; flex: 1; }
+.card-meta {
+  display: flex; align-items: center; gap: 6px; font-size: 11px;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+.elev-sm { box-shadow: var(--shadow-sm); }
+.elev-md { box-shadow: var(--shadow-md); }
+.elev-lg { box-shadow: var(--shadow-lg); }
+
+/* — tags — */
+.tag {
+  display: inline-flex; align-items: center; font-size: 11px;
+  letter-spacing: 0.02em; padding: 3px 10px;
+  border-radius: calc(var(--radius-md) * 0.75);
+}
+.tag-accent { background: var(--color-accent-100); color: var(--color-accent-800); }
+.tag-accent-2 { background: var(--color-accent-2-100); color: var(--color-accent-2-800); }
+.tag-neutral { background: var(--color-neutral-100); color: var(--color-neutral-800); }
+.tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+
+/* — navigation — */
+.nav {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: none;
+}
+.nav-brand {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 18px; margin-right: auto;
+}
+.nav a { color: inherit; text-decoration: none; font-size: 14px; }
+.nav a:hover, .nav a[aria-current='page'] { color: var(--color-accent); }
+
+/* — tables — */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th {
+  text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  padding: var(--space-2); border-bottom: 1px solid var(--color-divider);
+}
+.table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+.table tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+/* — dialog — */
+.dialog-backdrop {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+}
+.dialog {
+  width: min(440px, 100%); display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); border-radius: var(--radius-lg);
+  background: var(--color-surface); box-shadow: var(--shadow-lg);
+}
+.dialog-title {
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 20px;
+}
+.dialog-body { font-size: 14px; opacity: 0.85; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+
+/* — rounded frame: everything softens, small controls go pill — */
+.card, .dialog { border-radius: calc(var(--radius-lg) * 1.15); }
+.btn, .tag, .seg, .input { border-radius: 999px; }
+.input { padding-inline: 14px; }
+
+</style>
+<style>/* required styles */
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	}
+.leaflet-container {
+	overflow: hidden;
+	}
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	-webkit-user-select: none;
+	   -moz-user-select: none;
+	        user-select: none;
+	  -webkit-user-drag: none;
+	}
+/* Prevents IE11 from highlighting tiles in blue */
+.leaflet-tile::selection {
+	background: transparent;
+}
+/* Safari renders non-retina tile on retina better with this, but Chrome is worse */
+.leaflet-safari .leaflet-tile {
+	image-rendering: -webkit-optimize-contrast;
+	}
+/* hack that prevents hw layers "stretching" when loading new tiles */
+.leaflet-safari .leaflet-tile-container {
+	width: 1600px;
+	height: 1600px;
+	-webkit-transform-origin: 0 0;
+	}
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	display: block;
+	}
+/* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */
+/* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */
+.leaflet-container .leaflet-overlay-pane svg {
+	max-width: none !important;
+	max-height: none !important;
+	}
+.leaflet-container .leaflet-marker-pane img,
+.leaflet-container .leaflet-shadow-pane img,
+.leaflet-container .leaflet-tile-pane img,
+.leaflet-container img.leaflet-image-layer,
+.leaflet-container .leaflet-tile {
+	max-width: none !important;
+	max-height: none !important;
+	width: auto;
+	padding: 0;
+	}
+
+.leaflet-container img.leaflet-tile {
+	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
+	mix-blend-mode: plus-lighter;
+}
+
+.leaflet-container.leaflet-touch-zoom {
+	-ms-touch-action: pan-x pan-y;
+	touch-action: pan-x pan-y;
+	}
+.leaflet-container.leaflet-touch-drag {
+	-ms-touch-action: pinch-zoom;
+	/* Fallback for FF which doesn't support pinch-zoom */
+	touch-action: none;
+	touch-action: pinch-zoom;
+}
+.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+	-ms-touch-action: none;
+	touch-action: none;
+}
+.leaflet-container {
+	-webkit-tap-highlight-color: transparent;
+}
+.leaflet-container a {
+	-webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+}
+.leaflet-tile {
+	filter: inherit;
+	visibility: hidden;
+	}
+.leaflet-tile-loaded {
+	visibility: inherit;
+	}
+.leaflet-zoom-box {
+	width: 0;
+	height: 0;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	z-index: 800;
+	}
+/* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
+.leaflet-overlay-pane svg {
+	-moz-user-select: none;
+	}
+
+.leaflet-pane         { z-index: 400; }
+
+.leaflet-tile-pane    { z-index: 200; }
+.leaflet-overlay-pane { z-index: 400; }
+.leaflet-shadow-pane  { z-index: 500; }
+.leaflet-marker-pane  { z-index: 600; }
+.leaflet-tooltip-pane   { z-index: 650; }
+.leaflet-popup-pane   { z-index: 700; }
+
+.leaflet-map-pane canvas { z-index: 100; }
+.leaflet-map-pane svg    { z-index: 200; }
+
+.leaflet-vml-shape {
+	width: 1px;
+	height: 1px;
+	}
+.lvml {
+	behavior: url(#default#VML);
+	display: inline-block;
+	position: absolute;
+	}
+
+
+/* control positioning */
+
+.leaflet-control {
+	position: relative;
+	z-index: 800;
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+.leaflet-top,
+.leaflet-bottom {
+	position: absolute;
+	z-index: 1000;
+	pointer-events: none;
+	}
+.leaflet-top {
+	top: 0;
+	}
+.leaflet-right {
+	right: 0;
+	}
+.leaflet-bottom {
+	bottom: 0;
+	}
+.leaflet-left {
+	left: 0;
+	}
+.leaflet-control {
+	float: left;
+	clear: both;
+	}
+.leaflet-right .leaflet-control {
+	float: right;
+	}
+.leaflet-top .leaflet-control {
+	margin-top: 10px;
+	}
+.leaflet-bottom .leaflet-control {
+	margin-bottom: 10px;
+	}
+.leaflet-left .leaflet-control {
+	margin-left: 10px;
+	}
+.leaflet-right .leaflet-control {
+	margin-right: 10px;
+	}
+
+
+/* zoom and fade animations */
+
+.leaflet-fade-anim .leaflet-popup {
+	opacity: 0;
+	-webkit-transition: opacity 0.2s linear;
+	   -moz-transition: opacity 0.2s linear;
+	        transition: opacity 0.2s linear;
+	}
+.leaflet-fade-anim .leaflet-map-pane .leaflet-popup {
+	opacity: 1;
+	}
+.leaflet-zoom-animated {
+	-webkit-transform-origin: 0 0;
+	    -ms-transform-origin: 0 0;
+	        transform-origin: 0 0;
+	}
+svg.leaflet-zoom-animated {
+	will-change: transform;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+	-webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1);
+	   -moz-transition:    -moz-transform 0.25s cubic-bezier(0,0,0.25,1);
+	        transition:         transform 0.25s cubic-bezier(0,0,0.25,1);
+	}
+.leaflet-zoom-anim .leaflet-tile,
+.leaflet-pan-anim .leaflet-tile {
+	-webkit-transition: none;
+	   -moz-transition: none;
+	        transition: none;
+	}
+
+.leaflet-zoom-anim .leaflet-zoom-hide {
+	visibility: hidden;
+	}
+
+
+/* cursors */
+
+.leaflet-interactive {
+	cursor: pointer;
+	}
+.leaflet-grab {
+	cursor: -webkit-grab;
+	cursor:    -moz-grab;
+	cursor:         grab;
+	}
+.leaflet-crosshair,
+.leaflet-crosshair .leaflet-interactive {
+	cursor: crosshair;
+	}
+.leaflet-popup-pane,
+.leaflet-control {
+	cursor: auto;
+	}
+.leaflet-dragging .leaflet-grab,
+.leaflet-dragging .leaflet-grab .leaflet-interactive,
+.leaflet-dragging .leaflet-marker-draggable {
+	cursor: move;
+	cursor: -webkit-grabbing;
+	cursor:    -moz-grabbing;
+	cursor:         grabbing;
+	}
+
+/* marker & overlays interactivity */
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-image-layer,
+.leaflet-pane > svg path,
+.leaflet-tile-container {
+	pointer-events: none;
+	}
+
+.leaflet-marker-icon.leaflet-interactive,
+.leaflet-image-layer.leaflet-interactive,
+.leaflet-pane > svg path.leaflet-interactive,
+svg.leaflet-image-layer.leaflet-interactive path {
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+
+/* visual tweaks */
+
+.leaflet-container {
+	background: #ddd;
+	outline-offset: 1px;
+	}
+.leaflet-container a {
+	color: #0078A8;
+	}
+.leaflet-zoom-box {
+	border: 2px dotted #38f;
+	background: rgba(255,255,255,0.5);
+	}
+
+
+/* general typography */
+.leaflet-container {
+	font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	}
+
+
+/* general toolbar styles */
+
+.leaflet-bar {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+	border-radius: 4px;
+	}
+.leaflet-bar a {
+	background-color: #fff;
+	border-bottom: 1px solid #ccc;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: block;
+	text-align: center;
+	text-decoration: none;
+	color: black;
+	}
+.leaflet-bar a,
+.leaflet-control-layers-toggle {
+	background-position: 50% 50%;
+	background-repeat: no-repeat;
+	display: block;
+	}
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+	background-color: #f4f4f4;
+	}
+.leaflet-bar a:first-child {
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	}
+.leaflet-bar a:last-child {
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+	border-bottom: none;
+	}
+.leaflet-bar a.leaflet-disabled {
+	cursor: default;
+	background-color: #f4f4f4;
+	color: #bbb;
+	}
+
+.leaflet-touch .leaflet-bar a {
+	width: 30px;
+	height: 30px;
+	line-height: 30px;
+	}
+.leaflet-touch .leaflet-bar a:first-child {
+	border-top-left-radius: 2px;
+	border-top-right-radius: 2px;
+	}
+.leaflet-touch .leaflet-bar a:last-child {
+	border-bottom-left-radius: 2px;
+	border-bottom-right-radius: 2px;
+	}
+
+/* zoom control */
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+	font: bold 18px 'Lucida Console', Monaco, monospace;
+	text-indent: 1px;
+	}
+
+.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out  {
+	font-size: 22px;
+	}
+
+
+/* layers control */
+
+.leaflet-control-layers {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+	background: #fff;
+	border-radius: 5px;
+	}
+.leaflet-control-layers-toggle {
+	background-image: url("/app/leaflet-layers.png");
+	width: 36px;
+	height: 36px;
+	}
+.leaflet-retina .leaflet-control-layers-toggle {
+	background-image: url("/app/leaflet-layers-2x.png");
+	background-size: 26px 26px;
+	}
+.leaflet-touch .leaflet-control-layers-toggle {
+	width: 44px;
+	height: 44px;
+	}
+.leaflet-control-layers .leaflet-control-layers-list,
+.leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+	display: none;
+	}
+.leaflet-control-layers-expanded .leaflet-control-layers-list {
+	display: block;
+	position: relative;
+	}
+.leaflet-control-layers-expanded {
+	padding: 6px 10px 6px 6px;
+	color: #333;
+	background: #fff;
+	}
+.leaflet-control-layers-scrollbar {
+	overflow-y: scroll;
+	overflow-x: hidden;
+	padding-right: 5px;
+	}
+.leaflet-control-layers-selector {
+	margin-top: 2px;
+	position: relative;
+	top: 1px;
+	}
+.leaflet-control-layers label {
+	display: block;
+	font-size: 13px;
+	font-size: 1.08333em;
+	}
+.leaflet-control-layers-separator {
+	height: 0;
+	border-top: 1px solid #ddd;
+	margin: 5px -10px 5px -6px;
+	}
+
+/* Default icon URLs */
+.leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */
+	background-image: url("/app/leaflet-marker-icon.png");
+	}
+
+
+/* attribution and scale controls */
+
+.leaflet-container .leaflet-control-attribution {
+	background: #fff;
+	background: rgba(255, 255, 255, 0.8);
+	margin: 0;
+	}
+.leaflet-control-attribution,
+.leaflet-control-scale-line {
+	padding: 0 5px;
+	color: #333;
+	line-height: 1.4;
+	}
+.leaflet-control-attribution a {
+	text-decoration: none;
+	}
+.leaflet-control-attribution a:hover,
+.leaflet-control-attribution a:focus {
+	text-decoration: underline;
+	}
+.leaflet-attribution-flag {
+	display: inline !important;
+	vertical-align: baseline !important;
+	width: 1em;
+	height: 0.6669em;
+	}
+.leaflet-left .leaflet-control-scale {
+	margin-left: 5px;
+	}
+.leaflet-bottom .leaflet-control-scale {
+	margin-bottom: 5px;
+	}
+.leaflet-control-scale-line {
+	border: 2px solid #777;
+	border-top: none;
+	line-height: 1.1;
+	padding: 2px 5px 1px;
+	white-space: nowrap;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.8);
+	text-shadow: 1px 1px #fff;
+	}
+.leaflet-control-scale-line:not(:first-child) {
+	border-top: 2px solid #777;
+	border-bottom: none;
+	margin-top: -2px;
+	}
+.leaflet-control-scale-line:not(:first-child):not(:last-child) {
+	border-bottom: 2px solid #777;
+	}
+
+.leaflet-touch .leaflet-control-attribution,
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	box-shadow: none;
+	}
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	border: 2px solid rgba(0,0,0,0.2);
+	background-clip: padding-box;
+	}
+
+
+/* popup */
+
+.leaflet-popup {
+	position: absolute;
+	text-align: center;
+	margin-bottom: 20px;
+	}
+.leaflet-popup-content-wrapper {
+	padding: 1px;
+	text-align: left;
+	border-radius: 12px;
+	}
+.leaflet-popup-content {
+	margin: 13px 24px 13px 20px;
+	line-height: 1.3;
+	font-size: 13px;
+	font-size: 1.08333em;
+	min-height: 1px;
+	}
+.leaflet-popup-content p {
+	margin: 17px 0;
+	margin: 1.3em 0;
+	}
+.leaflet-popup-tip-container {
+	width: 40px;
+	height: 20px;
+	position: absolute;
+	left: 50%;
+	margin-top: -1px;
+	margin-left: -20px;
+	overflow: hidden;
+	pointer-events: none;
+	}
+.leaflet-popup-tip {
+	width: 17px;
+	height: 17px;
+	padding: 1px;
+
+	margin: -10px auto 0;
+	pointer-events: auto;
+
+	-webkit-transform: rotate(45deg);
+	   -moz-transform: rotate(45deg);
+	    -ms-transform: rotate(45deg);
+	        transform: rotate(45deg);
+	}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+	background: white;
+	color: #333;
+	box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+	}
+.leaflet-container a.leaflet-popup-close-button {
+	position: absolute;
+	top: 0;
+	right: 0;
+	border: none;
+	text-align: center;
+	width: 24px;
+	height: 24px;
+	font: 16px/24px Tahoma, Verdana, sans-serif;
+	color: #757575;
+	text-decoration: none;
+	background: transparent;
+	}
+.leaflet-container a.leaflet-popup-close-button:hover,
+.leaflet-container a.leaflet-popup-close-button:focus {
+	color: #585858;
+	}
+.leaflet-popup-scrolled {
+	overflow: auto;
+	}
+
+.leaflet-oldie .leaflet-popup-content-wrapper {
+	-ms-zoom: 1;
+	}
+.leaflet-oldie .leaflet-popup-tip {
+	width: 24px;
+	margin: 0 auto;
+
+	-ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
+	filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
+	}
+
+.leaflet-oldie .leaflet-control-zoom,
+.leaflet-oldie .leaflet-control-layers,
+.leaflet-oldie .leaflet-popup-content-wrapper,
+.leaflet-oldie .leaflet-popup-tip {
+	border: 1px solid #999;
+	}
+
+
+/* div icon */
+
+.leaflet-div-icon {
+	background: #fff;
+	border: 1px solid #666;
+	}
+
+
+/* Tooltip */
+/* Base styles for the element that has a tooltip */
+.leaflet-tooltip {
+	position: absolute;
+	padding: 6px;
+	background-color: #fff;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #222;
+	white-space: nowrap;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	pointer-events: none;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+	}
+.leaflet-tooltip.leaflet-interactive {
+	cursor: pointer;
+	pointer-events: auto;
+	}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	position: absolute;
+	pointer-events: none;
+	border: 6px solid transparent;
+	background: transparent;
+	content: "";
+	}
+
+/* Directions */
+
+.leaflet-tooltip-bottom {
+	margin-top: 6px;
+}
+.leaflet-tooltip-top {
+	margin-top: -6px;
+}
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-top:before {
+	left: 50%;
+	margin-left: -6px;
+	}
+.leaflet-tooltip-top:before {
+	bottom: 0;
+	margin-bottom: -12px;
+	border-top-color: #fff;
+	}
+.leaflet-tooltip-bottom:before {
+	top: 0;
+	margin-top: -12px;
+	margin-left: -6px;
+	border-bottom-color: #fff;
+	}
+.leaflet-tooltip-left {
+	margin-left: -6px;
+}
+.leaflet-tooltip-right {
+	margin-left: 6px;
+}
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	top: 50%;
+	margin-top: -6px;
+	}
+.leaflet-tooltip-left:before {
+	right: 0;
+	margin-right: -12px;
+	border-left-color: #fff;
+	}
+.leaflet-tooltip-right:before {
+	left: 0;
+	margin-left: -12px;
+	border-right-color: #fff;
+	}
+
+/* Printing */
+
+@media print {
+	/* Prevent printers from removing background-images of controls. */
+	.leaflet-control {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+		}
+	}
+</style>
+<script src="/app/leaflet-1.9.4.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="/app/data.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--color-bg); font-family: var(--font-body); color: var(--color-text); }
+  a { color: var(--color-accent-700); text-decoration: none; }
+  a:hover { color: var(--color-accent-600); }
+  #map { position: absolute; inset: 0; background: var(--color-bg); }
+  .leaflet-container { font-family: var(--font-body); background: var(--color-bg); }
+  .cluster { display: grid; place-items: center; border-radius: 999px; font-weight: 700; color: var(--color-text);
+    box-shadow: var(--shadow-md); border: 3px solid var(--color-bg); }
+  .cluster-n { display: grid; place-items: center; width: 60%; height: 60%; border-radius: 999px;
+    background: color-mix(in srgb, var(--color-bg) 93%, transparent); }
+  .cluster-tag { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; width: max-content;
+    position: relative; left: 50%; transform: translateX(-50%);
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider); box-shadow: var(--shadow-sm);
+    border-radius: 10px; padding: 4px 8px; font-size: 11px; line-height: 1.35; white-space: nowrap; }
+  .cluster-tag b { font-weight: 600; }
+  .cluster-tag i { width: 7px; height: 7px; border-radius: 999px; display: inline-block; margin-inline-end: 5px; }
+  .pin-label { margin-top: 3px; width: max-content; position: relative; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600;
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider); border-radius: 999px;
+    padding: 1px 7px; white-space: nowrap; box-shadow: var(--shadow-sm); }
+  .pin { width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
+    font-size: 10px; font-weight: 700; box-shadow: var(--shadow-sm); border: 2px solid var(--color-bg); }
+  /* Shown under a family because they married into it — same colour as the
+     family they were born to, dashed to say "joined, not born". */
+  .pin-wed { border-style: dashed; border-width: 2.5px; }
+  /* A place out of one person's life — where they were born, died, or are
+     buried — arrived at from their card in the tree. Deliberately unlike every
+     other mark here: this map is about where the family LIVES, its pins are
+     sized by headcount and its clusters merge, and a birthplace from 1912 is
+     none of those things. A teardrop, in the accent colour, alone. */
+  .spot { width: 34px; height: 34px; border-radius: 999px 999px 999px 2px;
+    transform: rotate(-45deg); display: grid; place-items: center;
+    background: var(--color-accent); border: 3px solid var(--color-bg);
+    box-shadow: var(--shadow-md); }
+  .spot svg { transform: rotate(45deg); display: block; }
+  .spot-label { margin-top: 6px; width: max-content; max-width: 260px; position: relative;
+    left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 600;
+    background: var(--color-surface); border: 1px solid var(--color-divider);
+    border-radius: 999px; padding: 3px 10px; box-shadow: var(--shadow-sm);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* One door, not "some people who happen to be near each other" — so it is a
+     rounded square where a cluster is a circle, and it carries a roof. The
+     conic gradient stays: two families under one roof is the normal case for a
+     married couple, and it is worth seeing. */
+  .household { display: grid; place-items: center; border-radius: 12px; font-weight: 700;
+    color: var(--color-text); box-shadow: var(--shadow-md); border: 3px solid var(--color-bg); }
+  .household-n { display: grid; grid-auto-flow: column; align-items: center; gap: 2px;
+    width: 74%; height: 62%; place-content: center; border-radius: 8px;
+    background: color-mix(in srgb, var(--color-bg) 93%, transparent); }
+  .household-n svg { width: 11px; height: 11px; opacity: .72; }
+  /* A cluster whose people are the ones the relation lines belong to. */
+  .cluster-sel, .household-sel { border-color: var(--color-accent);
+    box-shadow: var(--shadow-md), 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent); }
+  /* The list of people the details panel scrolls. Nothing here dresses a Leaflet
+     popup any more — the map does not open one. */
+  .pop-list { margin: 4px 0 0; padding: 0; list-style: none; }
+  .pop-list li { padding: 5px 0; border-top: 1px solid var(--color-divider); }
+  .pop-list b { font-weight: 600; }
+  .pop-list span { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+</style>
+<script>
+  /* Direction before first paint, same as the tree: flipping rtl→ltr after the
+     map has drawn moves every control across the screen. */
+  (function () {
+    try {
+      var v = localStorage.getItem('familyLang');
+      if (v !== 'he' && v !== 'en') v = null;
+      var l = v || ((navigator.language || '').match(/^(he|iw)/i) ? 'he' : 'en');
+      document.documentElement.setAttribute('lang', l);
+      document.documentElement.setAttribute('dir', l === 'he' ? 'rtl' : 'ltr');
+    } catch (e) {}
+  })();
+
+  /* An expired session comes back as 401 JSON, never as a login page. Reloading
+     turns it back into a document request, which the server redirects into the
+     sign-in flow. Guarded so a server that 401s the document cannot spin. */
+  (function () {
+    var f = window.fetch;
+    if (!f) return;
+    var bounced = false;
+    window.fetch = function () {
+      return f.apply(this, arguments).then(function (r) {
+        if (r && r.status === 401 && !bounced) { bounced = true; location.reload(); }
+        return r;
+      });
+    };
+  })();
+</script>
+<script src="/app/colors.js"></script>
+<script src="/app/v2-theme.js"></script>
+<script src="/app/origin.js?v=2"></script>
+<script src="/app/urlstate.js"></script>
+<script src="/app/fuzzy.js?v=2"></script>
+<script src="/app/countries.js?v=1"></script>
+<script src="/app/relations.js?v=4"></script>
+<script src="/app/contacts.js"></script>
+<script src="/app/profile.js"></script>
+<style>
+  /* Controls the design did not have: the settlement search, the colour
+     editor in the legend, and the copy-link affordance. Everything else is
+     the design's own CSS, above. */
+  .bar { pointer-events: auto; display: flex; align-items: center; gap: var(--space-2);
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+    border-radius: 999px; box-shadow: var(--shadow-md); padding: 8px 10px; }
+  /* The two pages are one thing with two views of it, so the way across is a
+     segmented control that says where you are, not a lone button off to the
+     side that reads as an extra. Same markup and same place on both pages. */
+  .nav-seg { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 3px;
+    border-radius: 999px; background: var(--color-neutral-200); border: 1px solid var(--color-divider); }
+  .nav-seg > * { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px;
+    border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap;
+    text-decoration: none; color: color-mix(in srgb, var(--color-text) 58%, transparent); }
+  .nav-seg > a:hover { background: var(--color-neutral-100); color: var(--color-text); }
+  .nav-seg .on { background: var(--color-accent); color: var(--color-bg); box-shadow: var(--shadow-sm); }
+  .nav-seg svg { flex: none; }
+  .icon-btn { width: 36px; height: 36px; flex: none; border-radius: 999px; display: grid; place-items: center;
+    border: 1px solid var(--color-divider); background: var(--color-neutral-100); color: var(--color-text);
+    font: inherit; font-size: 13px; cursor: pointer; }
+  .icon-btn:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+
+  /* Each filter needs its OWN positioned wrapper: the dropdown hangs off the
+     button, and `.search-wrap` is already the anchor for the search list. */
+  .filter-wrap { position: relative; flex: none; }
+  .filter-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
+    border-radius: 999px; border: 1px solid var(--color-divider); background: var(--color-neutral-100);
+    color: var(--color-text); font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  .filter-btn:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+  .filter-btn svg { flex: none; opacity: .5; }
+  .filter-btn .cnt { font-size: 12px; opacity: .6; font-variant-numeric: tabular-nums; }
+  /* A filter that is ON has to say so from across the screen — that is the
+     whole complaint the buttons exist to answer. */
+  .filter-btn.on { background: var(--color-accent-100); border-color: var(--color-accent);
+    color: var(--color-accent-900); font-weight: 600; }
+  .filter-btn.on svg { opacity: .9; }
+  .filter-btn.on .cnt { opacity: .85; }
+  .filter-menu { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 600;
+    width: max(250px, 100%); max-height: min(62vh, 460px); overflow: auto; padding: 6px;
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+    display: flex; flex-direction: column; gap: 3px; }
+  .filter-menu[hidden] { display: none; }
+  .filter-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 9px;
+    border-radius: 999px; border: 1.5px solid transparent; background: transparent;
+    font: inherit; font-size: 13px; cursor: pointer; text-align: start; color: var(--color-text); }
+  .filter-row:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+  .filter-row .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .filter-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Same two numbers, same reordering — the family filter list carries the
+     "+1" too, off the same countOf(). */
+  .filter-row .n { font-size: 12px; opacity: .55; font-variant-numeric: tabular-nums;
+    direction: ltr; unicode-bidi: isolate; }
+  .filter-row .tick { width: 14px; flex: none; opacity: 0; }
+  .filter-row[aria-pressed="true"] .tick { opacity: 1; }
+  /* What this family is to the reader, under its name — the same second line a
+     person carries in the search list, and the same words the legend uses.
+     Indented past the tick and the swatch so it hangs under the name rather
+     than under the furniture: 14 + 8 + 11 + 8. */
+  .filter-row { flex-wrap: wrap; }
+  .filter-row .sub { flex: 1 0 100%; padding-inline-start: 41px; margin-top: 1px;
+    font-size: 11px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: color-mix(in srgb, var(--color-text) 52%, transparent); }
+  .filter-clear { margin: 2px 0 4px; align-self: stretch; text-align: start; padding: 5px 9px;
+    border: 0; background: none; font: inherit; font-size: 12px; cursor: pointer;
+    color: var(--color-accent-700); border-radius: 8px; }
+  .filter-clear:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+  /* On a phone the two labels plus a 150px search box do not fit in one pill,
+     so the buttons keep their icon and their count and drop the word. */
+  @media (max-width: 620px) { .filter-btn .lbl { display: none; } .filter-btn { padding: 0 10px; } }
+
+  .search-wrap { position: relative; }
+  .search-input { width: 220px; min-height: 36px; border-radius: 999px; padding: 6px 14px;
+    border: 1px solid var(--color-divider); background: var(--color-neutral-100); color: var(--color-text);
+    font: inherit; font-size: 14px; }
+  .search-input:focus-visible { border-color: var(--color-accent); outline: none; }
+  @media (max-width: 620px) { .search-input { width: 150px; } }
+  .search-list { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 600;
+    width: max(320px, 100%); max-width: calc(100vw - 28px); max-height: 320px; overflow: auto; padding: 6px;
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+  .search-list[hidden] { display: none; }
+  .search-opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: start;
+    padding: 7px 10px; border: 0; border-radius: 999px; background: transparent; color: inherit;
+    font: inherit; font-size: 14px; cursor: pointer; }
+  .search-opt:hover, .search-opt[aria-selected="true"] { background: var(--color-accent-100); }
+  .search-opt .n { margin-inline-start: auto; font-size: 12px;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent); font-variant-numeric: tabular-nums; }
+  /* A row is a person or a place, and which one has to be readable at a glance:
+     a person wears their family's colour as a dot, a place wears the word. */
+  .search-opt .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+  .search-opt .sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+  .search-opt .dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+  .search-opt .tag { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    background: var(--color-neutral-200); color: color-mix(in srgb, var(--color-text) 62%, transparent); }
+  .search-empty { padding: 10px; font-size: 13px; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+
+  .legend-box { position: absolute; z-index: 500; bottom: var(--space-4); inset-inline-end: var(--space-3);
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+    padding: var(--space-3) var(--space-3); width: min(268px, calc(100vw - 2 * var(--space-3)));
+    max-height: min(56vh, 520px);
+    display: flex; flex-direction: column; gap: 6px; }
+  .legend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+  .legend-head .grow { flex: 1; display: flex; align-items: center; gap: 6px; background: none; border: 0;
+    font: inherit; color: inherit; text-align: start; cursor: pointer; padding: 0; }
+  /* .btn sets display:inline-flex, which is more specific than the browser's
+     rule for [hidden] — without this the "show all" button is never hidden. */
+  [hidden] { display: none !important; }
+  .legend-scroll { overflow: auto; display: flex; flex-direction: column; gap: 4px; padding-inline-end: 2px; }
+  .fam-row { display: flex; align-items: center; gap: 8px; }
+  .fam-toggle { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px 10px; border-radius: 999px; border: 1.5px solid transparent; background: transparent;
+    font: inherit; font-size: 13px; cursor: pointer; text-align: start; color: var(--color-text); }
+  /* What the family is made of, along the bottom of its own row — the same
+     strip the tree page draws inside its branch chips. */
+  .fam-toggle .obar { position: absolute; inset-inline: 10px; bottom: 3px; height: 3px; border-radius: 999px; }
+  /* The bar as it appears in the details panel, where there is room to name the
+     shares underneath it. */
+  .obar-lg { height: 10px; border-radius: 999px; margin: 8px 0 0; }
+  .obar-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; }
+  .obar-legend span.sw { width: 8px; height: 8px; border-radius: 2px; flex: none; display: inline-block; }
+  .obar-legend em { font-style: normal; opacity: .55; }
+  /* The name takes the room, which is what puts the count at the end of the
+     line. It used to be `margin-inline-start: auto` on the count itself — and
+     that margin resolves against the COUNT's direction, which the isolate
+     below flips, so the two ended up side by side against the name. */
+  .fam-toggle .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* "91 +1" is two numbers, and in an RTL line the browser reorders them into
+     "1+ 91" — which reads as one number with a stray plus, and is exactly what
+     got asked about. Isolated, so the count keeps its own direction wherever
+     the line puts it. */
+  .fam-toggle .n { flex: none; font-size: 12px; opacity: .6; font-variant-numeric: tabular-nums;
+    direction: ltr; unicode-bidi: isolate; }
+  /* How the reader reaches this family, under its name. The row becomes two
+     lines, so the name and the count go on the first: `.fam-toggle` is a flex
+     row, and this wraps it into a column with the head as its own line. One
+     line, ellipsised — "האמא של הבעל של האחות של האמא שלי" is longer than any
+     legend, and the title carries the whole of it. */
+  .fam-toggle { flex-wrap: wrap; }
+  .fam-toggle .head { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .fam-toggle .kin { flex: 1 0 100%; min-width: 0; font-size: 11px; line-height: 1.25;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: color-mix(in srgb, currentColor 62%, transparent); }
+  .swatch { position: relative; width: 26px; height: 26px; flex: none; border-radius: 999px;
+    border: 2px solid var(--color-bg); box-shadow: var(--shadow-sm); cursor: pointer; padding: 0; }
+  .swatch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
+  .legend-foot { font-size: 11px; line-height: 1.45; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+  /* The details panel.
+     What used to be a card anchored to the pin, which on a phone covered the
+     map it was describing. It is docked to the side now, opposite the legend:
+     the name and the counts are always up, the long list of people is one tap
+     behind a chevron. `top` and `max-height` are set from JS, because the
+     toolbar above it is two rows tall on a phone and one on a laptop. */
+  .sheet { position: absolute; z-index: 520; inset-inline-start: var(--space-3);
+    width: min(300px, calc(100vw - 2 * var(--space-3)));
+    display: flex; flex-direction: column; gap: 5px; overflow: hidden;
+    background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: var(--space-3); }
+  .sheet-head { display: flex; align-items: center; gap: 6px; }
+  .sheet-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; cursor: pointer;
+    background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: start; }
+  .sheet-title svg { flex: none; }
+  .sheet-title span { font-family: var(--font-heading); font-size: 17px; line-height: 1.2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sheet-x { width: 28px; height: 28px; flex: none; font-size: 18px; line-height: 1; padding: 0 0 2px; }
+  /* Back and forward through the people already opened, in the sheet's head
+     beside the close button. No size of their own on purpose: `.icon-btn`
+     already carries the 44px floor from v2-base.css, which is what the close
+     button next to them ends up at, and a smaller number here would only be
+     overruled by it anyway. `flex: none` so the name gives up the width. */
+  .sheet-nav { display: flex; align-items: center; gap: 2px; flex: none; }
+  .sheet-nav[hidden] { display: none; }
+  /* One drawn glyph, a right-facing chevron: already correct for "back" in
+     Hebrew and for "forward" in English, so each is mirrored only in the
+     language where it points the wrong way. Two icon paths is how a pair like
+     this ends up pointing the same direction. */
+  [dir="ltr"] .chev-back { transform: scaleX(-1); }
+  [dir="rtl"] .chev-fwd { transform: scaleX(-1); }
+  .sheet-sub { font-size: 13px; line-height: 1.45; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .sheet-body { overflow: auto; }
+  .toast { position: fixed; z-index: 900; bottom: var(--space-4); inset-inline-start: var(--space-4);
+    background: var(--color-neutral-900); color: var(--color-neutral-100); font-size: 13px;
+    padding: 9px 16px; border-radius: 999px; box-shadow: var(--shadow-lg); }
+  .toast[hidden] { display: none; }
+  /* The key for the relation lines, said in the panel that opened them. */
+  .pop-rel { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; margin-top: 7px;
+    font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .pop-rel span { display: inline-flex; align-items: center; gap: 6px; }
+  .pop-rel .rk { flex: none; color: var(--color-neutral-600); }
+  .pop-rel .rk-off { opacity: 0.8; }
+  .pop-link { display: inline-block; margin-top: 8px; font-size: 13px; }
+  .pop-list a { color: inherit; }
+  .pop-list a:hover b { color: var(--color-accent-700); }
+  /* Close family, as chips you can walk — the same four groups the tree's
+     person card grew, in this page's plain-DOM idiom. The avatar wears the
+     family colour their pin wears, so a chip and a pin are recognisably the
+     same person. */
+  .rel-grp { margin-top: 9px; }
+  .rel-grp h4 { margin: 0 0 5px; font-size: 12px; font-weight: 600;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+  .rel-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .rel-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
+    padding-block: 3px; padding-inline: 4px 11px;
+    border: 1px solid var(--color-divider); border-radius: 999px;
+    background: var(--color-neutral-100); color: inherit; font: inherit;
+    text-align: start; cursor: pointer; }
+  .rel-chip:hover { background: var(--color-accent-100); border-color: var(--color-accent-300); }
+  .rel-chip .av { width: 24px; height: 24px; border-radius: 999px; flex: none;
+    display: grid; place-items: center; font-size: 9px; font-weight: 700;
+    background-size: cover; background-position: center; }
+  .rel-chip .nm { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-size: 13px; line-height: 1.25; }
+  .rel-chip .rl { display: block; font-size: 10px; line-height: 1.25;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+</style>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   v2 — the map, on a phone.
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Measured on a 390×844 screen, opening one person's card put SIX floating
+   surfaces on the map at once: a title card, a search bar, a language bar, the
+   details panel, the zoom buttons and the legend — plus Leaflet's attribution
+   underneath the legend. The panel covered about 78% of the map and, worst of
+   all, covered the pin it was describing.
+
+   Three moves fix it, and they are all the same move: give each thing one place
+   and let the map have the rest.
+
+     1. one bar, not three
+     2. the card is a bottom sheet, and the map moves the pin above it
+     3. the legend gets out of the way when the card is up             */
+
+/* ── one bar ────────────────────────────────────────────────────────────────
+   The title card ("The family on the map / 323 of 380 have a place to live")
+   was a permanent 200px band at the top of a phone to say a number that belongs
+   in the legend. It goes there. What is left — the segmented Tree|Map, the
+   search, the two filters, copy-link, language — is one wrapping bar. */
+@media (max-width: 760px) {
+  #topbar {
+    top: calc(var(--space-2) + var(--safe-t)) !important;
+    inset-inline-start: calc(var(--space-2) + var(--safe-l)) !important;
+    inset-inline-end: calc(var(--space-2) + var(--safe-r)) !important;
+    gap: var(--space-2) !important;
+  }
+  #titleBar { display: none !important; }
+  /* Search and its two filter buttons take a row of their own and all of the
+     width: v1 gave the field 150px, which is why its placeholder rendered as
+     "Find a person or pla". */
+  .bar.search-wrap { order: 2; flex: 1 1 100%; }
+  .search-input { width: auto !important; flex: 1 1 auto; min-width: 0; }
+  .bar.tools { order: 1; flex: 0 1 auto; min-width: 0; }
+  #topbar > .spacer { display: none; }
+  /* The fit button keeps its icon and drops its words, the same trade the two
+     filter buttons already make at this width. */
+  #fit .fit-label { display: none; }
+  #fit { padding: 0 12px !important; }
+}
+@media (min-width: 761px) { #fit .fit-icon { display: none; } }
+
+/* ── the card as a bottom sheet ─────────────────────────────────────────────
+   Docked to the bottom edge, full width, with the same grip the tree page uses.
+   `--sheet-h` is written from JS during a drag; the stops are the same three
+   ideas (peek / half / full). */
+@media (max-width: 760px) {
+  .sheet {
+    inset-inline: 0 !important;
+    inset-block-start: auto !important;
+    bottom: 0 !important;
+    width: auto !important;
+    max-height: none !important;
+    height: var(--sheet-h, 42dvh);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: calc(var(--space-3) + var(--safe-b));
+    transition: height .26s cubic-bezier(.22, .61, .36, 1);
+  }
+  .sheet.dragging { transition: none; }
+  .sheet-grip {
+    display: flex; align-items: center; justify-content: center;
+    flex: none; height: 30px; margin: -8px 0 0;
+    background: none; border: 0; padding: 0; cursor: grab; touch-action: none;
+  }
+  .sheet-grip::before {
+    content: ''; width: 40px; height: 5px; border-radius: 999px;
+    background: var(--color-neutral-400);
+  }
+  /* The legend and the card both want the bottom of the screen, and on a phone
+     the card covers that corner completely. Rather than leave the legend
+     underneath where it cannot be read or tapped, it goes away while a card is
+     open and comes back when the card closes — v1 left the two overlapping. */
+  body.has-sheet .legend-box { display: none !important; }
+  /* Leaflet's attribution shared the same corner as the legend. It rides above
+     the sheet rather than being hidden by it: the OSM tile licence requires the
+     credit to be visible, and "visible unless you tapped something" is not that.
+     `--sheet-h` is written by placeSheet() on every drag and snap. */
+  .leaflet-control-attribution {
+    max-width: 78vw; font-size: 11px;
+    margin-bottom: var(--safe-b) !important;
+    transition: margin-bottom .26s cubic-bezier(.22, .61, .36, 1);
+  }
+  body.has-sheet .leaflet-control-attribution {
+    margin-bottom: calc(var(--sheet-h, 42dvh) + 4px) !important;
+  }
+}
+@media (min-width: 761px) { .sheet-grip { display: none; } }
+
+/* ── the legend ─────────────────────────────────────────────────────────────
+   v1 showed 8 of 14 families and cut the rest off, because a five-line block of
+   instructions was pinned below the list inside a fixed-height box. The prose
+   moves behind an ⓘ and the list gets the room back. */
+.legend-box { padding-bottom: calc(var(--space-3) + var(--safe-b)); }
+@media (max-width: 760px) {
+  .legend-box {
+    inset-inline-end: calc(var(--space-2) + var(--safe-r));
+    bottom: calc(var(--space-2) + var(--safe-b));
+    max-height: min(64dvh, 560px);
+    width: min(300px, calc(100vw - 2 * var(--space-2)));
+    transition: max-height .2s, opacity .2s;
+  }
+}
+.legend-foot[hidden] { display: none !important; }
+.legend-info {
+  width: 26px; height: 26px; flex: none; border-radius: 999px;
+  border: 1px solid var(--color-divider); background: var(--color-neutral-100);
+  color: color-mix(in srgb, var(--color-text) 62%, transparent);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+}
+.legend-info[aria-expanded="true"] { background: var(--color-accent-100);
+  border-color: var(--color-accent); color: var(--color-accent-900); }
+/* The head is a row of three now (title, ⓘ, show-all) and needs to wrap rather
+   than squeeze the title to nothing. */
+.legend-head { flex-wrap: wrap; row-gap: 4px; }
+
+/* ── the fit button ─────────────────────────────────────────────────────────
+   "מרכז על ישראל" / "Israel" was a filled accent pill — the loudest control on
+   the page — for a zoom reset, while the two filters that actually change what
+   you are looking at were quiet outlines. They swap roles. */
+#fit { background: var(--color-neutral-100) !important; color: var(--color-text) !important;
+  border: 1px solid var(--color-divider) !important; box-shadow: none !important;
+  font-weight: 500 !important; }
+#fit:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent) !important; }
+
+/* ── zoom buttons ───────────────────────────────────────────────────────────
+   30×30 targets on a touch screen, for a gesture the screen already has. A
+   coarse pointer means fingers, and fingers pinch. */
+@media (pointer: coarse) { .leaflet-control-zoom { display: none !important; } }
+
+/* Icon-only at this width, so it needs a width floor as well as a height one —
+   the shared rule in v2-base.css only sets height, because forcing a width on a
+   text button would stretch "Back" into a square. */
+@media (max-width: 760px) { #fit { min-width: var(--tap); justify-content: center; } }
+
+/* The labels under the pins and the cluster breakdown — the numbers a reader is
+   actually here to read — were 11px over a busy map. */
+.cluster-tag, .pin-label { font-size: 12px !important; }
+@media (pointer: fine) { .leaflet-control-zoom a { width: 34px !important; height: 34px !important; line-height: 34px !important; } }
+
+/* ── the map itself in the dark ─────────────────────────────────────────────
+   OSM's raster tiles are drawn for a white page and there is no dark variant on
+   this tile server. Inverting hue-rotated is the standard trick and it holds up:
+   roads stay lighter than blocks, water stays distinct, and the family's pins —
+   which are drawn by us, not by the tile — are excluded so they keep the exact
+   colour the family chose. */
+@media (prefers-color-scheme: dark) {
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.94) contrast(.92); }
+  .leaflet-control-attribution { background: rgba(20, 18, 13, .8) !important; color: #b5ad94 !important; }
+  .leaflet-control-attribution a { color: #d5ceb8 !important; }
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<!-- Above the details panel and the legend, not beside them: the search list
+     drops out of this bar and is long enough to reach both. z-index on the
+     option itself cannot win that — the bar is its stacking context. -->
+<div id="topbar" style="position: absolute; z-index: 560; top: var(--space-3); inset-inline-start: var(--space-3); inset-inline-end: var(--space-3); display: flex; gap: var(--space-2); align-items: flex-start; flex-wrap: wrap; pointer-events: none">
+  <div id="titleBar" class="bar">
+    <div style="min-width: 0; padding-inline-start: 6px">
+      <div id="title" style="font-family: var(--font-heading); font-size: 17px; line-height: 1.1"></div>
+      <div id="count" style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent)"></div>
+    </div>
+  </div>
+
+
+  <!-- The filters live beside the search because that is where somebody goes to
+       narrow the map down. They were rows inside the legend at the bottom of
+       the screen, which is where a legend belongs and where a control does not:
+       nobody found them. -->
+  <div class="bar search-wrap">
+    <input id="q" class="search-input" type="text" autocomplete="off" spellcheck="false"
+           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="qlist">
+    <div id="qlist" class="search-list" role="listbox" hidden></div>
+
+    <div class="filter-wrap">
+      <button id="famBtn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="famMenu">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8Z"></path></svg>
+        <span class="lbl"></span><span class="cnt"></span>
+      </button>
+      <div id="famMenu" class="filter-menu" role="group" hidden></div>
+    </div>
+
+    <div class="filter-wrap">
+      <button id="orgBtn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="orgMenu">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18Z"></path></svg>
+        <span class="lbl"></span><span class="cnt"></span>
+      </button>
+      <div id="orgMenu" class="filter-menu" role="group" hidden></div>
+    </div>
+  </div>
+
+  <div class="spacer" style="flex: 1; min-width: 0"></div>
+
+  <!-- One bar, not two. v1 kept the Tree|Map control in its own pill beside the
+       title card and these three in another, which on a phone wrapped to two
+       separate rows — and with the search that made three bands of furniture
+       stacked over the map before anything else was on screen. They pay for one
+       pill's padding between them now and fit on one row. -->
+  <div class="bar tools">
+    <nav class="nav-seg">
+      <a id="toTree" href="/tree">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V9"></path><path d="M5 22v-5a7 7 0 0 1 7-7"></path><path d="M19 22v-5a7 7 0 0 0-7-7"></path><circle cx="12" cy="5" r="3"></circle></svg>
+        <span></span>
+      </a>
+      <span class="on" aria-current="page">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+        <span id="tabMap"></span>
+      </span>
+    </nav>
+    <button id="copy" class="icon-btn" type="button">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"></path></svg>
+    </button>
+    <button id="lang" class="icon-btn" type="button" style="width: auto; padding: 0 12px"></button>
+    <!-- Was `btn-primary` — a filled accent pill, the loudest thing on the map,
+         for a zoom reset. It is a secondary control now, and on a phone it drops
+         its label to an icon; see the note in the stylesheet. -->
+    <button id="fit" class="btn btn-secondary" type="button" style="border-radius: 999px; white-space: nowrap; flex: none">
+      <svg class="fit-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M21 16v3a2 2 0 0 1-2 2h-3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path></svg>
+      <span class="fit-label">מרכז על ישראל</span>
+    </button>
+  </div>
+</div>
+
+<div class="legend-box">
+  <div class="legend-head">
+    <button id="legendToggle" class="grow" type="button" aria-expanded="true" aria-controls="legend">
+      <svg id="legendChevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+      <span id="legendTitle"></span>
+    </button>
+    <!-- Five lines of instructions used to be pinned below the family list
+         inside a fixed-height box, which is why the box showed 8 of 14 families
+         and cut the rest off. Prose a reader needs once does not get permanent
+         room; it gets a button. -->
+    <button id="legendInfo" class="legend-info" type="button" aria-expanded="false" aria-controls="legendFoot">i</button>
+    <button id="famAll" class="btn btn-ghost" type="button" style="font-size: 12px; padding: 0 4px"></button>
+  </div>
+  <!-- The count the title card carried on a phone, where it belongs: beside the
+       families it is counting. -->
+  <div id="legendCount" style="font-size: 12px; color: color-mix(in srgb, var(--color-text) 55%, transparent)"></div>
+  <div id="legend" class="legend-scroll"></div>
+  <div id="legendFoot" class="legend-foot" hidden></div>
+  <!-- Outside the collapsible part on purpose: folding the legend away on a
+       phone is the common case, and this is the one control in here somebody
+       reaches for repeatedly. Hidden outright for a reader the tree does not
+       place — a button that can only apologise is worse than no button. -->
+  <button id="centerMe" class="btn btn-primary" type="button" hidden
+          style="border-radius: 999px; justify-content: center; gap: 7px; font-size: 13px; min-height: 36px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
+    <span></span>
+  </button>
+</div>
+
+<aside id="sheet" class="sheet" hidden>
+  <!-- On a phone this panel is a bottom sheet and this is what moves it. On a
+       laptop it is a side dock and the grip is hidden — the CSS decides, so
+       there is one panel rather than two. -->
+  <button id="sheetGrip" class="sheet-grip" type="button"></button>
+  <div class="sheet-head">
+    <button id="sheetToggle" class="sheet-title" type="button" aria-expanded="true" aria-controls="sheetBody">
+      <svg id="sheetChevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+      <span id="sheetName"></span>
+    </button>
+    <!-- Only for a person: a settlement sheet is a list, not a stop on a walk.
+         paintSheet() shows and dims these; see the trail block in the script. -->
+    <div id="sheetNav" class="sheet-nav" hidden>
+      <button id="sheetPrev" class="icon-btn" type="button">
+        <svg class="chev-back" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+      </button>
+      <button id="sheetNext" class="icon-btn" type="button">
+        <svg class="chev-fwd" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+      </button>
+    </div>
+    <button id="sheetClose" class="icon-btn sheet-x" type="button">×</button>
+  </div>
+  <div id="sheetSub" class="sheet-sub"></div>
+  <div id="sheetBody" class="sheet-body"></div>
+</aside>
+
+<div id="toast" class="toast" hidden></div>
+
+<script>
+/* המשפחה על המפה — the tree's people, placed.
+ *
+ * Three things this page holds that the design's standalone version could not:
+ *
+ *   * families are rows now, so a pin's colour is the colour the family chose
+ *     and editing it here writes to the DB (and the change log) rather than to
+ *     a local variable;
+ *   * settlements come from the `places` table, which is geocoded out of band —
+ *     nothing here calls a geocoder, and a city with no coordinates is counted
+ *     out loud instead of quietly dropped;
+ *   * every view has an address. Filtering to a family, opening a settlement or
+ *     a person, panning and zooming all land in the query string, so the link
+ *     in the address bar is the view on screen.
+ */
+
+/* ───────── language ───────── */
+var L10N = {
+  he: {
+    dir: 'rtl', other: 'English', otherCode: 'en',
+    title: 'המשפחה על המפה', toTree: 'עץ', tabMap: 'מפה', fit: 'מרכז על ישראל', fitShort: 'ישראל',
+    families: 'משפחות', searchPh: 'חיפוש אדם או יישוב…', noMatch: 'לא נמצא',
+    placeTag: 'יישוב', noAddress: 'אין כתובת בעץ', centerMe: 'מרכז עליי',
+    cannotPlace: function (n) { return 'ל' + n + ' אין כתובת בעץ — הכרטיס נפתח, המפה נשארת במקומה.'; },
+    copy: 'העתק קישור לתצוגה הזאת', copied: 'הקישור הועתק', copyFailed: 'לא הצלחתי להעתיק — העתיקו מסרגל הכתובות',
+    /* A place out of somebody's life, arrived at from their card in the tree.
+       Not a resident pin and never counted as one — see the `spot` block. */
+    spotKinds: { birth: 'מקום לידה', death: 'מקום פטירה', burial: 'מקום קבורה', place: 'מקום' },
+    spotClear: 'הסרת הסימון',
+    showAll: 'הצג הכל', colorTitle: function (n) { return 'הצבע של משפחת ' + n; },
+    origin: 'ארץ מקור', unknownOrigin: 'לא ידוע', origins: 'מוצא',
+    anyShare: 'כל מי שיש לו חלק כלשהו מהמוצא הזה',
+    familyFilterHint: 'סינון לפי משפחה', showAllFamilies: 'כל המשפחות', showAllOrigins: 'כל המוצאים',
+    counted: function (a, b) { return a + ' מתוך ' + b + ' עם מקום מגורים'; },
+    noCity: function (n) { return 'ל־' + n + ' אין יישוב רשום בעץ.'; },
+    unmapped: function (n) { return n + ' עם יישוב שלא הצלחנו למקם.'; },
+    abroad: function (n, where) { return n + ' גרים מחוץ לישראל (' + where + ') — חפשו את שם המדינה כדי להגיע אליהם.'; },
+    hint: 'הקישו על משפחה כדי לסנן, ועל העיגול כדי לשנות את הצבע שלה. סינון לפי משפחה ומוצא גם בכפתורים שליד החיפוש.',
+    hintLabel: 'הסבר על המפה',
+    offline: 'אין חיבור — מוצג מה שנשמר מהביקור הקודם',
+    wedInto: function (n) { return 'נישא/ה למשפחת ' + n; },
+    bornPlusWed: function (a, b) { return a + ' נולדו למשפחה, ' + b + ' נישאו אליה'; },
+    /* The same thing bornPlusWed says in a tooltip — which a phone has no way
+       of showing, and "91 +1" is not self-explanatory. It goes in the legend's
+       own explanation, where a thumb can reach it. */
+    plusNote: 'המספר הוא מי שנולדו למשפחה; ה+ הוא מי שנישאו אליה.',
+    wedNote: 'הסינון כולל גם מי שנישאו למשפחה — הסימון המקווקו — בצבע המשפחה שממנה באו.',
+    // The line under a family's name: how the reader reaches it. Worded exactly
+    // as the tree's families panel words it — same family, same sentence. A
+    // possessive binds straight onto the name ("גיסתי נועה"); a route, or the
+    // long "… שלי" where Hebrew has no suffix for it, keeps the separator.
+    myFamily: 'המשפחה שלי',
+    kinVia: function (rel, name, route) {
+      return rel + (route || / שלי$/.test(rel) ? ' · ' : ' ') + name;
+    },
+    openInTree: 'פתיחה בעץ', peopleIn: function (n) { return n + ' אנשים'; },
+    seenLabel: 'פעיל לאחרונה', seenNever: 'עדיין לא נכנס/ה', seenJustNow: 'ממש עכשיו',
+    contactNames: { whatsapp: 'וואטסאפ', instagram: 'אינסטגרם', facebook: 'פייסבוק', linkedin: 'לינקדאין' },
+    // The same "tell us about yourself" prompt the tree raises, worded
+    // identically — a relative who lands on the map first should not meet a
+    // different app. Filling in happens on the tree, which is where the form is.
+    profileTitle: 'נעים להכיר — ומה איתך?',
+    profileBody: 'את הפרטים בעץ ממלאים בני משפחה זה על זה, אז דווקא הכרטיס שלך הוא לרוב הריק ביותר. חסרים אצלך:',
+    profileWhy: 'הכול רשות. מה שתמלא/י יעזור לבני משפחה למצוא אותך ולדבר איתך — ותמיד אפשר לשנות או למחוק אחר כך.',
+    profileFill: 'מילוי הפרטים שלי',
+    profileLater: 'לא עכשיו',
+    profileItems: {
+      photo: 'תמונה', born: 'תאריך לידה', city: 'איפה את/ה גר/ה', phone: 'טלפון',
+      email: 'אימייל', job: 'מקצוע', links: 'אינסטגרם / פייסבוק / לינקדאין',
+    },
+    places: function (n) { return n + ' יישובים'; }, andMore: function (n) { return '…ועוד ' + n; },
+    household: 'משק בית',
+    age: 'גיל', saveFailed: 'שינוי הצבע לא נשמר', close: 'סגירה',
+    // The trail through the people already opened. Same words as the tree's,
+    // because it is the same walk seen from the other page.
+    histPrev: 'הקודם', histNext: 'הבא',
+    histTo: function (n) { return 'חזרה אל ' + n; },
+    histToNext: function (n) { return 'קדימה אל ' + n; },
+    relDesc: 'הורים וילדים', relSib: 'אחים ואחיות',
+    relOff: function (n) { return 'ועוד ' + n + ' שלא על המפה'; },
+    relHint: 'הקישו על אדם או על עיגול של קבוצה כדי למתוח את קווי הקִרבה: חץ מהורה לילד, קו מקווקו בין אחים.',
+    // The four groups on a person's sheet, and the word under each name.
+    kinParents: 'הורים', kinSpouse: 'בן/בת זוג', kinSiblings: 'אחים ואחיות', kinChildren: 'ילדים',
+    kinFather: 'אב', kinMother: 'אם', kinHusband: 'בעל', kinWife: 'אישה',
+    kinBrother: 'אח', kinSister: 'אחות', kinHalfBrother: 'אח למחצה', kinHalfSister: 'אחות למחצה',
+    kinSon: 'בן', kinDaughter: 'בת', kinHalfSibling: 'אח/ות למחצה',
+  },
+  en: {
+    dir: 'ltr', other: 'עברית', otherCode: 'he',
+    title: 'The family on the map', toTree: 'Tree', tabMap: 'Map', fit: 'Fit Israel', fitShort: 'Israel',
+    families: 'Families', searchPh: 'Find a person or place…', noMatch: 'Nothing found',
+    placeTag: 'place', noAddress: 'no address in the tree', centerMe: 'Centre on me',
+    cannotPlace: function (n) { return n + ' has no address in the tree — the card is open, the map stays put.'; },
+    copy: 'Copy a link to this view', copied: 'Link copied', copyFailed: 'Could not copy — take it from the address bar',
+    spotKinds: { birth: 'Place of birth', death: 'Place of death', burial: 'Place of burial', place: 'Place' },
+    spotClear: 'Clear this mark',
+    showAll: 'Show all', colorTitle: function (n) { return 'Colour of the ' + n + ' family'; },
+    origin: 'Country of origin', unknownOrigin: 'unknown', origins: 'Origins',
+    anyShare: 'Everyone with any share of this origin',
+    familyFilterHint: 'Filter by family', showAllFamilies: 'All families', showAllOrigins: 'All origins',
+    counted: function (a, b) { return a + ' of ' + b + ' have a place to live'; },
+    noCity: function (n) { return n + ' have no place recorded in the tree.'; },
+    unmapped: function (n) { return n + ' live somewhere we could not place.'; },
+    abroad: function (n, where) { return n + ' live outside Israel (' + where + ') — search the country name to go there.'; },
+    hint: 'Tap a family to filter, tap its dot to change its colour. Family and origin filters are also in the buttons beside the search.',
+    hintLabel: 'About this map',
+    offline: 'Offline — showing what was saved on your last visit',
+    wedInto: function (n) { return 'married into ' + n; },
+    bornPlusWed: function (a, b) { return a + ' born into the family, ' + b + ' married in'; },
+    plusNote: 'The number is who was born into the family; the + is who married in.',
+    wedNote: 'The filter also shows whoever married into the family — the dashed pins — in the colour of the family they came from.',
+    myFamily: 'my family',
+    kinVia: function (rel, name, route) { return rel + (route ? ' · ' : ' ') + name; },
+    openInTree: 'Open in the tree', peopleIn: function (n) { return n + ' people'; },
+    seenLabel: 'Last here', seenNever: 'Has never signed in', seenJustNow: 'just now',
+    contactNames: { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn' },
+    profileTitle: 'Good to see you — and what about you?',
+    profileBody: 'This tree is filled in by relatives about each other, so the card that is emptiest is usually your own. Yours is missing:',
+    profileWhy: 'All optional. Whatever you fill in helps the family find you and talk to you — and you can change or clear any of it later.',
+    profileFill: 'Fill in my details',
+    profileLater: 'Not now',
+    profileItems: {
+      photo: 'A photo', born: 'Date of birth', city: 'Where you live', phone: 'Phone',
+      email: 'Email', job: 'Occupation', links: 'Instagram / Facebook / LinkedIn',
+    },
+    places: function (n) { return n + ' places'; }, andMore: function (n) { return '…and ' + n + ' more'; },
+    household: 'One household',
+    age: 'age', saveFailed: 'The colour was not saved', close: 'Close',
+    histPrev: 'Previous', histNext: 'Next',
+    histTo: function (n) { return 'Back to ' + n; },
+    histToNext: function (n) { return 'Forward to ' + n; },
+    relDesc: 'parents and children', relSib: 'siblings',
+    relOff: function (n) { return n + ' more off the map'; },
+    relHint: 'Tap a person or a group circle to draw the relations: an arrow from parent to child, a dashed line between siblings.',
+    kinParents: 'Parents', kinSpouse: 'Spouse', kinSiblings: 'Siblings', kinChildren: 'Children',
+    kinFather: 'father', kinMother: 'mother', kinHusband: 'husband', kinWife: 'wife',
+    kinBrother: 'brother', kinSister: 'sister', kinHalfBrother: 'half-brother', kinHalfSister: 'half-sister',
+    kinSon: 'son', kinDaughter: 'daughter', kinHalfSibling: 'half-sibling',
+  },
+};
+
+function initialLang() {
+  try { var v = localStorage.getItem('familyLang'); if (L10N[v]) return v; } catch (e) {}
+  var pref = (window.FAMILY_ME && window.FAMILY_ME.lang) || '';
+  if (L10N[pref]) return pref;
+  var nav = (navigator.language || '');
+  return /^he|^iw/i.test(nav) ? 'he' : (nav ? 'en' : 'he');
+}
+var lang = initialLang(), T = L10N[lang];
+var he = function () { return lang === 'he'; };
+
+/* ───────── data ───────── */
+var PEOPLE = (window.FAMILY || []);
+/* A town is (name, country), and `key` is the one string it goes by — the name
+   at home, `name|CC` abroad. Everything on this page that used to be indexed by
+   the city name is indexed by that key, including `?city=` in the URL: keeping
+   the bare name for Israel is what leaves every link anybody has ever sent
+   still pointing at the same town. lib/places.mjs writes the key; nothing here
+   invents one except for a person, below. */
+var CO = globalThis.FamilyCountries || null;
+var foreign = function (c) { return !!CO && CO.isForeign(c); };
+var countryLabel = function (c) { return CO ? CO.label(c, lang) : String(c || ''); };
+function placeKeyOf(city, country) {
+  return foreign(country) ? String(city || '').trim() + '|' + String(country).trim().toUpperCase()
+    : String(city || '').trim();
+}
+var pKey = function (p) { return placeKeyOf(p.city, p.country); };
+
+var PLACE = {};
+(window.FAMILY_PLACES || []).forEach(function (p) {
+  if (p.lat != null && p.lng != null) PLACE[p.key || p.name] = p;
+});
+var PLACE_LIST = (window.FAMILY_PLACES || []).filter(function (p) { return p.lat != null; });
+/* What a town is called on screen. Abroad the country is part of the name —
+   `טריפולי` alone is a town in two countries and the map is drawing one of
+   them. At home it is just the town, because saying "ישראל" after each of 1,300
+   Israeli settlements is noise that means nothing. */
+function placeLabel(place) {
+  if (!place) return '';
+  if (typeof place === 'string') place = PLACE[place];
+  if (!place) return '';
+  return foreign(place.country) ? place.name + ', ' + countryLabel(place.country) : place.name;
+}
+
+var FAM = {}, FAM_ORDER = [];
+(window.FAMILY_FAMILIES || []).forEach(function (f) {
+  FAM[f.key] = f;
+  f.sh = FamilyColors.shades(f.color);
+  FAM_ORDER.push(f.key);
+});
+
+/* Origins are rows too, with a name in both languages — installed before
+   anything draws, for the same reason the families are. Without this the map's
+   origin filter and its per-family bars name every country in Hebrew whatever
+   language the page is in. */
+/* Guarded on `load` itself — see the note on the same call in tree-v2.html. A
+   cached copy of origin.js older than this document is a real state on an
+   installed phone, and it must degrade, not throw. */
+if (globalThis.FamilyOrigin && typeof globalThis.FamilyOrigin.load === 'function') {
+  globalThis.FamilyOrigin.load(window.FAMILY_ORIGINS, window.FAMILY_ORIGIN_REGIONS);
+}
+/* And fill in anything else an older cached copy is missing — see tree-v2.html. */
+if (globalThis.FamilyOrigin) {
+  if (typeof globalThis.FamilyOrigin.labelOf !== 'function') {
+    globalThis.FamilyOrigin.labelOf = function (c) { return c; };
+  }
+  if (typeof globalThis.FamilyOrigin.regionLabel !== 'function') {
+    globalThis.FamilyOrigin.regionLabel = function () { return ''; };
+  }
+}
+
+/* The same rule the server's familyKey() applies: the branch without its
+   parenthesised suffix, except that "unconfirmed" is its own family. Both sides
+   have to agree or a person would be filtered by one key and coloured by
+   another. */
+function famKey(p) {
+  var br = String((p && p.branch) || '');
+  if (/unconfirmed/i.test(br)) return 'unconfirmed';
+  return br.replace(/\s*\(.*\)\s*$/, '').trim() || 'other';
+}
+function famOf(p) { return FAM[famKey(p)] || null; }
+function famName(f) { return (he() ? f.nameHe : f.nameEn) || f.key; }
+var NEUTRAL = { line: '#a19786', fill: '#eee7db', ink: '#474238', edge: '#c0b6a5' };
+function sh(p) { var f = famOf(p); return f ? f.sh : NEUTRAL; }
+
+/** "הרצל 14, עומר" — the same line the tree's person card shows. The country
+    is named only when it is not Israel, for the reason placeLabel gives. */
+function addressLine(p) {
+  var street = [p.street, p.house].filter(Boolean).join(' ');
+  return [street, p.city, foreign(p.country) ? countryLabel(p.country) : ''].filter(Boolean).join(', ');
+}
+
+function personName(p) {
+  if (!he() && (p.firstEn || p.lastEn)) return ((p.firstEn || '') + ' ' + (p.lastEn || '')).trim();
+  return ((p.first || '') + ' ' + (p.last || '')).trim();
+}
+/* How many people answer to each name, counted two ways: `called` is the first
+   word of the given name — what anybody actually says — and `given` is the whole
+   of it. The server's splitName() takes only the LAST word for the surname, so
+   "דנה מיכל לוי" arrives as given "דנה מיכל", and she is דנה to everyone. */
+var firstNameCount = {};
+function firstNames() {
+  if (firstNameCount[lang]) return firstNameCount[lang];
+  var out = { called: {}, given: {} };
+  PEOPLE.forEach(function (p) {
+    var g = (!he() && (p.firstEn || p.lastEn) ? (p.firstEn || p.first) : p.first) || '';
+    if (!g) return;
+    out.given[g] = (out.given[g] || 0) + 1;
+    var c = g.split(/\s+/)[0];
+    out.called[c] = (out.called[c] || 0) + 1;
+  });
+  firstNameCount[lang] = out;
+  return out;
+}
+
+/* The person who introduces a family, named as briefly as the row allows. A
+   surname earns its place by telling the reader something: it does not when it
+   repeats the row it sits on — "נועה לוי" says Levi twice — and it does not
+   when there is only one צוף in the family. Where two people share a first name
+   the full one comes back; "גיסי נועם" pointing at either of two Noams is worse
+   than a longer line. The tree's panel goes by the same rule. */
+function kinName(p, famLabel) {
+  var enName = !he() && (p.firstEn || p.lastEn);
+  var last = (enName ? (p.lastEn || p.last) : p.last) || '';
+  var given = (enName ? (p.firstEn || p.first) : p.first) || '';
+  if (!given) return personName(p);
+  var n = firstNames(), called = given.split(/\s+/)[0];
+  if (n.called[called] === 1) return called;
+  if (n.given[given] === 1) return given;
+  if (last && last === famLabel) return given;
+  return personName(p);
+}
+
+var byNo = {}, byId = {};
+PEOPLE.forEach(function (p) { if (p.no) byNo[String(p.no)] = p; byId[p.id] = p; });
+
+/* Who descends from whom.
+ *
+ * `parents` points upward, and the map needs to walk downward too — the lines
+ * around a selected person are redrawn on every pan and zoom, and scanning all
+ * of PEOPLE for one person's children each time is the sort of thing that
+ * shows up as a stutter on a phone. */
+var kidsOf = {};
+PEOPLE.forEach(function (p) {
+  (p.parents || []).forEach(function (par) { (kidsOf[par] = kidsOf[par] || []).push(p); });
+});
+
+/* The relations the map draws, from one person outward, as ordered pairs:
+ * `from` → `to` runs down the generations, which is the way the arrow points.
+ *
+ * Siblings are whoever shares a parent — half-siblings included, because the
+ * tree records only one parent for plenty of people and calling those "not
+ * siblings" would drop real ones. Each relative appears once: a parent who is
+ * also somehow listed as a sibling is drawn as the parent. */
+function relationsOf(me) {
+  var out = [], seen = {};
+  seen[me.id] = 1;
+  (me.parents || []).forEach(function (id) {
+    var p = byId[id];
+    if (!p || seen[p.id]) return;
+    seen[p.id] = 1;
+    out.push({ from: p, to: me, other: p, kind: 'desc' });
+  });
+  (kidsOf[me.id] || []).forEach(function (kid) {
+    if (seen[kid.id]) return;
+    seen[kid.id] = 1;
+    out.push({ from: me, to: kid, other: kid, kind: 'desc' });
+  });
+  (me.parents || []).forEach(function (id) {
+    (kidsOf[id] || []).forEach(function (sib) {
+      if (seen[sib.id]) return;
+      seen[sib.id] = 1;
+      out.push({ from: me, to: sib, other: sib, kind: 'sib' });
+    });
+  });
+  return out;
+}
+
+/* Who married into which family.
+ *
+ * `branch` follows the blood line, so a woman who married out keeps her own
+ * family's label — a woman keeps her birth family's name though she is married
+ * into another, and though she raised children of that other one. Filtering on
+ * the label alone therefore drew a household with the wife and the mother
+ * missing, which is not what anybody means by that family. A spouse counts as
+ * part of the family they married into, in both directions. */
+var spouseFam = {}, wedCount = {}, wedAny = false;
+PEOPLE.forEach(function (p) { if (p.spouse && byId[p.spouse]) spouseFam[p.id] = famKey(byId[p.spouse]); });
+PEOPLE.forEach(function (p) {
+  var into = spouseFam[p.id];
+  if (into && into !== famKey(p)) { wedCount[into] = (wedCount[into] || 0) + 1; wedAny = true; }
+});
+
+/* ───────── origin ─────────
+ * The bar the tree page draws, in this page's plain-DOM idiom. Colours, order
+ * and the unknown-last rule all come out of /app/origin.js, so the two pages
+ * cannot drift: a family whose strip is two greens and a grey here is the same
+ * two greens and grey there.
+ *
+ * A family's members are the set this page's own FILTER draws — born into it or
+ * married into it, per the note above. That is deliberately the map's rule and
+ * not the tree's `groupKey` folding: each surface describes the people it
+ * actually shows, so the bar under a legend row always explains the pins that
+ * row turns on. */
+var famMembers = {};
+PEOPLE.forEach(function (p) {
+  var own = famKey(p), wed = spouseFam[p.id];
+  (famMembers[own] = famMembers[own] || []).push(p);
+  if (wed && wed !== own) (famMembers[wed] = famMembers[wed] || []).push(p);
+});
+
+/* ───────── where the reader stands ─────────
+ *
+ * A legend of thirteen surnames is somebody else's family until it says which
+ * one is yours and how you reach the others, so every row carries the closest
+ * relative the reader has in it: "סבתא רבתא שלי · שרה לוי". The tree's
+ * families panel says the same line about the same family — the whole of the
+ * judgement, and the kinship words with it, are in /app/relations.js precisely
+ * so the two cannot drift.
+ *
+ * The candidates are the people BORN into a family, which is deliberately not
+ * the set this page's rows filter. Counting a spouse into the family they
+ * married in to is right for the pins — that is what a family name means on a
+ * map — and wrong for this question: it introduced an in-law family as "my
+ * brother", who stands in their row only because he married one of them, and it
+ * called my wife's family "my family" because I am in its pins myself. How you
+ * are related to a family is a question about the line, so the line is what
+ * answers it, and the tree's panel lands on the same person.
+ */
+var SELF = (window.FAMILY_SELF || '');
+
+/* The shape relations.js asks for: parents, spouse and sex, with the marriage
+   pointing both ways. The payload records a marriage on one side only, and
+   without the second link half of them read as no relation at all. */
+var relP = {};
+PEOPLE.forEach(function (p) {
+  relP[p.id] = { id: p.id, g: p.g, born: p.born,
+    parents: (p.parents || []).filter(function (x) { return byId[x]; }),
+    spouse: p.spouse && byId[p.spouse] ? p.spouse : null };
+});
+PEOPLE.forEach(function (p) { if (p.spouse && relP[p.spouse]) relP[p.spouse].spouse = p.id; });
+
+/* Computed once per language and kept — the legend is redrawn on every filter
+   click and every pan that resizes it, and this walks the whole tree. */
+var kinByLang = {};
+function famKin() {
+  if (kinByLang[lang]) return kinByLang[lang];
+  var out = {}, R = globalThis.FamilyRelations;
+  /* A reader the tree has not placed yet has no relations to state, and a
+     phone can be running this document against a copy of relations.js from a
+     previous release. Every function this block calls is named here rather
+     than one standing in for the rest: guarding on introduce() alone is what
+     let the tree call mine() on a copy that had no mine() and blank itself. */
+  if (SELF && relP[SELF] && R && ['rankPerGroup', 'introduce', 'mine', 'chainMine']
+      .every(function (fn) { return typeof R[fn] === 'function'; })) {
+    // byId, not the row relations.js hands back: relP carries only what the
+    // graph walks need, and `branch` — which is what a family key is made of —
+    // is not one of them.
+    var ranked = R.rankPerGroup(relP, SELF, function (p) { return famKey(byId[p.id]); });
+    var none = R.label({ kind: 'none' }, lang);
+    Object.keys(FAM).forEach(function (k) {
+      var via = R.introduce(relP, SELF, ranked[k] || [], 4);
+      if (!via) { out[k] = none; return; }
+      if (via.self) { out[k] = T.myFamily; return; }
+      var who = kinName(byId[via.id], famName(FAM[k]));
+      out[k] = T.kinVia(via.rel ? R.mine(via.rel, lang) : R.chainMine(relP, SELF, via.hops, lang),
+        who, !via.rel);
+    });
+  }
+  kinByLang[lang] = out;
+  return out;
+}
+
+/* The country's name in the language being read, off the `origins` table.
+   It used to return the raw Hebrew string the data travels as, which is what
+   put "תוניסיה" in the English filter list. */
+function originLabel(c) { return globalThis.FamilyOrigin.labelOf(c, he() ? 'he' : 'en'); }
+
+/* Every origin anybody in the tree carries a share of, in the palette's own
+   fixed order so the filter list reads down the regions and ends on "unknown" —
+   the same order the bars are drawn in. The count is HEADS, not shares: it is
+   there to say how many pins a click will leave on the map, and half a person
+   is not half a pin. */
+var ORIGIN_COUNT = {};
+PEOPLE.forEach(function (p) {
+  Object.keys(p.originMix || {}).forEach(function (c) {
+    if ((p.originMix[c] || 0) > 0) ORIGIN_COUNT[c] = (ORIGIN_COUNT[c] || 0) + 1;
+  });
+});
+var ORIGIN_KEYS = (function () {
+  var O = globalThis.FamilyOrigin;
+  var known = O.ORDER.filter(function (c) { return ORIGIN_COUNT[c]; });
+  // Anything a relative typed that the palette has no slot for still filters;
+  // it draws in the neutral "other" fill and sorts before unknown.
+  var extra = Object.keys(ORIGIN_COUNT).filter(function (c) {
+    return c !== O.UNKNOWN && O.ORDER.indexOf(c) < 0;
+  }).sort();
+  return known.concat(extra, ORIGIN_COUNT[O.UNKNOWN] ? [O.UNKNOWN] : []);
+}());
+
+/** Every share in words, for a title attribute — the legend a 3px strip cannot carry. */
+function originTip(segs) {
+  return segs.map(function (s) {
+    return originLabel(s.country) + ' ' + Math.round(s.frac * 100) + '%';
+  }).join(' · ');
+}
+
+/**
+ * The panel-sized bar: the full mix drawn, and every share at or above `min`
+ * named underneath. The bar itself is never filtered — a gradient normalises to
+ * what it is handed, so drawing only the big shares would quietly inflate them.
+ */
+function originBarHtml(mix, min) {
+  var O = globalThis.FamilyOrigin;
+  var segs = O.segmentsOf(mix || {});
+  if (!segs.length) return '';
+  var rows = segs.filter(function (s) { return s.frac >= (min || 0); }).map(function (s) {
+    return '<span style="display:inline-flex;align-items:center;gap:5px">'
+      + '<span class="sw" style="background:' + s.color + '"></span>'
+      + esc(originLabel(s.country)) + ' <em>' + Math.round(s.frac * 100) + '%</em></span>';
+  }).join('');
+  return '<div style="font-size:12px;opacity:.6;margin-top:8px">' + esc(T.origin) + '</div>'
+    + '<div class="obar-lg" title="' + esc(originTip(segs)) + '" style="background:'
+    + O.barCss(segs, T.dir === 'rtl') + '"></div>'
+    + '<div class="obar-legend">' + rows + '</div>';
+}
+
+var located = PEOPLE.filter(function (p) { return p.city && PLACE[pKey(p)]; });
+/* Two different absences, and the page says which is which: nobody wrote down
+   where they live, versus we wrote it down and could not find it on a map. The
+   second one is a bug in the places table and should read like one. */
+var noCity = PEOPLE.filter(function (p) { return !p.city; }).length;
+var unmapped = PEOPLE.length - located.length - noCity;
+
+/* The family outside Israel: how many, and which countries. The map opens on
+   Israel (see fit()), so without this line ten relatives are on the page and
+   off the screen, which is indistinguishable from not being there. */
+var ABROAD_COUNT = (function () {
+  var seen = {}, n = 0;
+  located.forEach(function (p) {
+    if (!foreign(p.country)) return;
+    n++;
+    seen[String(p.country).toUpperCase()] = 1;
+  });
+  return { n: n, where: Object.keys(seen).map(countryLabel).join(', ') };
+}());
+
+/* ───────── state, and its address ───────── */
+var U = FamilyUrl.read();
+/* A group of people in a link.
+ *
+ * The people are named by number rather than by the settlements they live in,
+ * because past z14 a cluster is a handful of neighbours and not a town — a link
+ * to "these six" has to come back as those six. A cluster at country zoom can
+ * hold two hundred of them, and two hundred numbers is not a link anybody would
+ * paste, so runs travel as ranges: g=1-8,12-13,19-23. */
+function packNos(nos) {
+  var seen = {}, ns = [];
+  nos.forEach(function (n) { if (+n > 0 && !seen[n]) { seen[n] = 1; ns.push(+n); } });
+  ns.sort(function (a, b) { return a - b; });
+  var out = [], i = 0;
+  while (i < ns.length) {
+    var a = ns[i], b = a;
+    while (i + 1 < ns.length && ns[i + 1] === b + 1) b = ns[++i];
+    out.push(a === b ? String(a) : a + '-' + b);
+    i++;
+  }
+  return out;
+}
+function unpackNos(parts) {
+  var out = [];
+  parts.forEach(function (part) {
+    var m = /^(\d+)-(\d+)$/.exec(part);
+    if (!m) return out.push(part);
+    for (var n = +m[1]; n <= +m[2]; n++) out.push(String(n));
+  });
+  return out;
+}
+function readGroup(v) {
+  return unpackNos(FamilyUrl.list(v)).filter(function (n) { return byNo[n]; });
+}
+
+/* Three ways to have somebody selected, and they are exclusive: one person, one
+   settlement, or the people inside a cluster that was clicked. */
+var state = {
+  only: FamilyUrl.list(U.family).filter(function (k) { return FAM[k]; }),
+  origins: FamilyUrl.list(U.origin).filter(function (c) { return ORIGIN_COUNT[c]; }),
+  // `?city=` carries the place KEY. For everywhere in Israel that is the town
+  // name it always was, so old links still resolve; a town abroad appends its
+  // country because the name alone does not name a place.
+  city: U.city && PLACE[U.city] ? U.city : '',
+  person: U.p && byNo[U.p] ? U.p : '',
+  group: readGroup(U.g),
+};
+var inFilter = function (key) { return state.only.indexOf(key) >= 0; };
+var famPass = function (p) {
+  if (!state.only.length) return true;
+  return inFilter(famKey(p)) || (!!spouseFam[p.id] && inFilter(spouseFam[p.id]));
+};
+
+/* ANY share, not the dominant one. Somebody who is a quarter Romanian is partly
+   Romanian, and a filter that answered otherwise would flatten exactly the
+   mixes the origin bars exist to show — אריאה would vanish from a Romania
+   filter while her 50%-unknown half decided she was nothing in particular.
+   Several origins selected is a UNION: "show me Yemen or Iraq". */
+var originPass = function (p) {
+  if (!state.origins.length) return true;
+  var mix = p.originMix || {};
+  for (var i = 0; i < state.origins.length; i++) {
+    if ((mix[state.origins[i]] || 0) > 0) return true;
+  }
+  return false;
+};
+
+/* The two filters INTERSECT: families narrow to a line, origins narrow to a
+   place it came from, and picking one of each means both at once. */
+var visible = function (p) { return famPass(p) && originPass(p); };
+/** Shown because of who they married, not because of who their parents were. */
+var marriedIn = function (p) {
+  return !!state.only.length && !inFilter(famKey(p)) && !!spouseFam[p.id] && inFilter(spouseFam[p.id]);
+};
+/* Exactly the set render() draws — a relative outside it has nowhere for a line
+   to end, whether because nobody wrote down where they live or because the
+   family filter is hiding them. */
+var onMap = function (p) { return !!p && !!p.city && !!PLACE[pKey(p)] && visible(p); };
+
+/* Whoever the relation lines belong to. One person, the people of a settlement,
+   or the people inside a clicked cluster — the drawing does not care which,
+   which is what lets a group behave exactly like a person. */
+function selectedPeople() {
+  if (state.person && byNo[state.person]) return [byNo[state.person]];
+  if (state.group.length) {
+    return state.group.map(function (n) { return byNo[n]; })
+      .filter(function (p) { return p && onMap(p); });
+  }
+  if (state.city) return located.filter(function (p) { return pKey(p) === state.city && visible(p); });
+  return [];
+}
+
+/* Every relation with at least one end in `people`, each pair once. Without the
+   dedupe a father and son who are both in the selection would be two entries
+   for the one line between them, counted twice in the popup. */
+function relationsAround(people) {
+  var out = [], seen = {};
+  people.forEach(function (me) {
+    relationsOf(me).forEach(function (rel) {
+      var pair = rel.kind + ':' + (rel.from.id < rel.to.id ? rel.from.id + '|' + rel.to.id : rel.to.id + '|' + rel.from.id);
+      if (seen[pair]) return;
+      seen[pair] = 1;
+      out.push(rel);
+    });
+  });
+  return out;
+}
+
+/** How many relations a selection has, and how many of them the map cannot show. */
+function relSummary(people) {
+  var sum = { desc: 0, sib: 0, off: 0 };
+  relationsAround(people).forEach(function (rel) {
+    if (onMap(rel.from) && onMap(rel.to)) sum[rel.kind]++;
+    else sum.off++;
+  });
+  return sum;
+}
+
+function pushUrl(patch, push) {
+  FamilyUrl.write(patch, { push: !!push });
+}
+function syncUrl(push) {
+  pushUrl({
+    family: FamilyUrl.join(state.only),
+    origin: FamilyUrl.join(state.origins),
+    city: state.city || '',
+    p: state.person || '',
+    g: FamilyUrl.join(packNos(state.group)),
+  }, push);
+}
+
+/* ───────── the map ───────── */
+var map = L.map('map', { zoomControl: false, minZoom: 6, maxZoom: 17 });
+
+/* The legend sits at the inline end, which is the LEFT of the screen in Hebrew
+   and the right in English. Leaflet's corners are physical, so the zoom buttons
+   have to be placed against the reading direction or the two stack on top of
+   each other in one of the two languages. */
+var zoomCtl = null;
+function placeZoom() {
+  if (zoomCtl) map.removeControl(zoomCtl);
+  zoomCtl = L.control.zoom({ position: he() ? 'bottomright' : 'bottomleft' }).addTo(map);
+}
+placeZoom();
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors', maxZoom: 19, opacity: 0.82,
+}).addTo(map);
+
+var ISRAEL = L.latLngBounds([29.45, 34.2], [33.35, 35.95]);
+/* The opening view is Israel even though some of the family is not in it.
+   Fitting everybody would mean opening on a world map on which this country —
+   where all but a dozen of them live — is four pixels wide, to make ten people
+   visible without scrolling. They are reachable instead: by zooming out, by the
+   search box, which answers to a country's name, and by the line in the legend
+   that says how many there are and where. */
+function fit() { map.fitBounds(ISRAEL, { padding: [40, 40] }); }
+
+/* Where each person's pin goes.
+ *
+ * Someone with a full address sits on their house; everyone else is spread
+ * around the middle of their town so the pins are separable when you zoom in.
+ * The spread is per town and by index, so it is stable between renders — a pin
+ * that moved every time the map redrew would be unusable. */
+var ADDR = {};
+(window.FAMILY_ADDRESSES || []).forEach(function (a) { ADDR[a.key] = a; });
+function addrKey(p) {
+  var base = [p.city, p.street, p.house].map(function (v) {
+    return String(v == null ? '' : v).replace(/["'׳״]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  }).join('|');
+  // Appended only when it is not Israel, exactly as lib/places.mjs writes it —
+  // the two have to produce the same string or every geocoded address in the
+  // country would stop being found by the page that draws it.
+  return foreign(p.country) ? base + '|' + String(p.country).trim().toLowerCase() : base;
+}
+/* A household is everyone at one door: same town, same street, same HOUSE
+ * NUMBER. The number is what makes it a door. A street on its own is a street —
+ * two unrelated families can both live on הרצל — and a yishuv filed as
+ * its own street with no number (טלמון / טלמון, the standing shape for a
+ * settlement that has no street names) is a town, which is what the town pin
+ * already says. Both would otherwise be drawn as one large family living
+ * together. */
+function hhKey(p) { return (p.city && p.street && p.house) ? addrKey(p) : ''; }
+
+var HH = {};                       // household key → its members, in tree order
+located.forEach(function (p) {
+  var k = hhKey(p);
+  if (k) (HH[k] = HH[k] || []).push(p);
+});
+var hhOf = {};                     // person id → household key, SHARED doors only
+Object.keys(HH).forEach(function (k) {
+  if (HH[k].length < 2) { delete HH[k]; return; }   // one person is a person
+  HH[k].forEach(function (p) { hhOf[p.id] = k; });
+});
+
+var exact = {};
+located.forEach(function (p) {
+  if (!p.street) return;
+  var hit = ADDR[addrKey(p)];
+  if (hit) exact[p.id] = [hit.lat, hit.lng];
+});
+
+/* Pins are placed per UNIT — a household, or one person living alone as far as
+ * this page knows — and never per person.
+ *
+ * That distinction only shows itself when the address did NOT geocode, which is
+ * most of them: a household of five whose street OSM has never heard of used to
+ * take five slots on the town ring and be drawn as five separate points spread
+ * across the town, which reads as five unrelated households. They are one door,
+ * so they get one slot and one point, whether or not anyone could place it. */
+var jitter = {}, byCity = {};
+located.forEach(function (p) {
+  var c = byCity[pKey(p)] = byCity[pKey(p)] || { of: {}, units: [] };
+  var k = hhOf[p.id];
+  if (!k) { c.units.push([p]); return; }
+  if (c.of[k]) { c.of[k].push(p); return; }
+  c.units.push(c.of[k] = [p]);
+});
+Object.keys(byCity).forEach(function (c) {
+  var units = byCity[c].units, base = [PLACE[c].lat, PLACE[c].lng];
+  var at = function (u, ll) { u.forEach(function (p) { jitter[p.id] = ll; }); };
+  var loose = units.filter(function (u) { return !exact[u[0].id]; });
+  units.forEach(function (u) { if (exact[u[0].id]) at(u, exact[u[0].id]); });
+  loose.forEach(function (u, i) {
+    if (loose.length === 1) { at(u, base); return; }
+    var ang = (i / loose.length) * Math.PI * 2, r = 0.0075 + 0.0045 * Math.floor(i / 8);
+    at(u, [base[0] + Math.sin(ang) * r * 0.7, base[1] + Math.cos(ang) * r]);
+  });
+});
+
+/* The household a blob is, if it is one: every person drawn at this point lives
+ * at the same door. Two households that happen to share a point — which is what
+ * a street-centroid geocode does to two houses on one street — are not one, and
+ * fall through to the ordinary cluster. */
+function blobHousehold(list) {
+  var k = hhOf[list[0].id];
+  if (!k || list.length < 2) return '';
+  for (var i = 1; i < list.length; i++) if (hhOf[list[i].id] !== k) return '';
+  return k;
+}
+
+/* Ages are counted to the last birthday, not by subtracting the years. This
+   used to be `thisYear - birthYear`, which made everyone whose birthday had not
+   come round yet a year too old — in mid-August that was 124 of the 305 living
+   people with a real date of birth, and it disagreed with the tree, which had
+   always counted properly. A record that is only a year ("1988") still has to
+   assume the 1st of January, same as the tree does; that one is ±1 by nature. */
+function parseD(v) {
+  var m = String(v || '').trim().match(/^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/);
+  return m ? new Date(+m[1], m[2] ? +m[2] - 1 : 0, m[3] ? +m[3] : 1) : null;
+}
+function age(p) {
+  var b = parseD(p && p.born);
+  if (!b) return null;
+  var e = p.died ? parseD(p.died) : new Date();
+  if (!e) return null;
+  var y = e.getFullYear() - b.getFullYear();
+  var m = e.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && e.getDate() < b.getDate())) y--;
+  return y >= 0 ? y : null;
+}
+/* No `relation_to_root` here any more: it is research bookkeeping written from
+   one person's point of view, in English, and the page computes real relations
+   for whoever is reading. It is not in the payload at all now. */
+function lifeLine(p) {
+  var a = age(p), bits = [];
+  if (p.born) bits.push(String(p.born).slice(0, 4) + (p.died ? '–' + String(p.died).slice(0, 4) : ''));
+  if (a !== null) bits.push((p.died ? '' : T.age + ' ') + a);
+  return bits.join(' · ');
+}
+/* When this person was last USING the app, read as a distance — see
+   touchSeen() in lib/store.mjs for why `lastSeen` is not a login date. Shown
+   only for somebody who could sign in at all: a relative who died in 1973 has
+   not failed to visit. Kept word-for-word in step with the tree's ago() /
+   seenLabel(), which is the copy a reader is more likely to have seen first.
+
+   Intl is wrapped for the same reason it is there: this page is installable
+   and an old engine has to yield a plain date, not a sheet that throws. */
+function canSignIn(p) { return !!p && !p.died && !!(p.email || p.phone); }
+
+function seenAgo(ts) {
+  if (!ts) return '';
+  var loc = lang === 'he' ? 'he-IL' : 'en-GB';
+  var ms = Date.now() - ts;
+  if (ms < 90 * 1000) return T.seenJustNow;
+  var days = Math.floor(ms / 86400000);
+  try {
+    if (days <= 60 && days >= 0) {
+      var rtf = new Intl.RelativeTimeFormat(loc, { numeric: 'auto' });
+      var mins = Math.round(ms / 60000);
+      if (mins < 60) return rtf.format(-mins, 'minute');
+      var hrs = Math.round(mins / 60);
+      if (hrs < 24) return rtf.format(-hrs, 'hour');
+      return rtf.format(-days, 'day');
+    }
+  } catch (e) { /* fall through to the date */ }
+  return new Date(ts).toLocaleDateString(loc);
+}
+
+function seenHtml(p) {
+  var text = p.lastSeen ? seenAgo(p.lastSeen) : (canSignIn(p) ? T.seenNever : '');
+  if (!text) return '';
+  return '<div style="font-size:12px;margin:4px 0 0;opacity:.62">'
+    + esc(T.seenLabel) + ': ' + esc(text) + '</div>';
+}
+
+var esc = function (s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+};
+/* A person's page in the tree. The number is the family's own vocabulary for a
+   person — "תעדכני את 137" — so it is what the link carries. */
+var treeHref = function (p) { return p.no ? '/tree?p=' + p.no : '/tree'; };
+
+function personRow(p) {
+  return '<li><a href="' + treeHref(p) + '"><b>' + esc(personName(p)) + '</b> '
+    + '<span>' + esc([addressLine(p), lifeLine(p)].filter(Boolean).join(' · ')) + '</span></a></li>';
+}
+
+/* ───────── close family on a person's sheet ─────────
+ *
+ * A sheet used to be a dead end: it said who this was and offered the tree.
+ * The people a reader wants next are almost always the four groups below, and
+ * on a map they are the hardest to find by eye — a brother can be a screen
+ * away or in another country. Each chip goes to that person the way the search
+ * box does, so the pin, the search and the chip all land on the same state.
+ *
+ * The words live in this page's own translation table, like every other string
+ * here; the one thing that must not drift from the tree — whether a shared
+ * parent makes two people half-siblings — comes from /app/relations.js. */
+function initialsOf(p) {
+  var n = personName(p).split(/\s+/);
+  return ((n[0] || ' ')[0] + (n.length > 1 ? (n[n.length - 1] || ' ')[0] : '')).trim();
+}
+
+/** Oldest first; whoever has no date at all goes last, not first. */
+function byBorn(x, y) {
+  var bx = String(x.born || ''), by = String(y.born || '');
+  if (!bx !== !by) return bx ? -1 : 1;
+  return bx < by ? -1 : bx > by ? 1 : 0;
+}
+
+/* Every one of these words picks a side, and eleven people in the tree have no
+   recorded sex — אריאה was being told she is a בן. The heading above the chip
+   already says which group this is, so where the tree does not know, the chip
+   says nothing rather than guessing. `unknown` is what a caller passes for the
+   one thing worth keeping either way: "half" is real information, and the only
+   thing here a reader could not have read off the heading. */
+function kinWord(p, male, female, unknown) {
+  if (p.g === 'f') return female;
+  if (p.g === 'm') return male;
+  return unknown || '';
+}
+
+function kinChip(p, word) {
+  var c = sh(p);
+  var css = 'border:1.5px solid ' + c.edge + ';background-color:' + c.fill + ';color:' + c.ink
+    // The photo is the avatar where there is one; initials would print over it.
+    + (p.photo ? ";background-image:url('/photo/" + esc(p.photo) + "')" : '');
+  return '<button class="rel-chip" type="button" data-no="' + esc(p.no) + '"'
+    + ' title="' + esc(word ? personName(p) + ' · ' + word : personName(p)) + '">'
+    + '<span class="av" style="' + css + '">' + (p.photo ? '' : esc(initialsOf(p))) + '</span>'
+    + '<span style="min-width:0"><span class="nm">' + esc(personName(p)) + '</span>'
+    + '<span class="rl">' + esc(word) + '</span></span></button>';
+}
+
+function kinHtml(me) {
+  // Navigation is by person number, so anybody without one cannot be a chip.
+  var named = function (list) { return list.filter(function (p) { return p && p.no; }); };
+  var parents = named((me.parents || []).map(function (id) { return byId[id]; }));
+  var spouse = named([me.spouse ? byId[me.spouse] : null]);
+
+  var seen = {};
+  seen[me.id] = 1;
+  var sibs = [];
+  (me.parents || []).forEach(function (id) {
+    (kidsOf[id] || []).forEach(function (s) { if (!seen[s.id]) { seen[s.id] = 1; sibs.push(s); } });
+  });
+  // slice(): kidsOf is the index render() walks on every pan, not scratch space.
+  var kids = (kidsOf[me.id] || []).slice();
+
+  var groups = [
+    // Father before mother, which is the order the API sends them in.
+    [T.kinParents, parents.map(function (p) { return kinChip(p, kinWord(p, T.kinFather, T.kinMother)); })],
+    [T.kinSpouse, spouse.map(function (p) { return kinChip(p, kinWord(p, T.kinHusband, T.kinWife)); })],
+    [T.kinSiblings, named(sibs).sort(byBorn).map(function (p) {
+      var half = globalThis.FamilyRelations.halfSibs(me.parents, p.parents);
+      return kinChip(p, half ? kinWord(p, T.kinHalfBrother, T.kinHalfSister, T.kinHalfSibling)
+        : kinWord(p, T.kinBrother, T.kinSister));
+    })],
+    [T.kinChildren, named(kids).sort(byBorn).map(function (p) {
+      return kinChip(p, kinWord(p, T.kinSon, T.kinDaughter));
+    })],
+  ];
+  return groups.filter(function (g) { return g[1].length; }).map(function (g) {
+    return '<div class="rel-grp"><h4>' + esc(g[0]) + '</h4>'
+      + '<div class="rel-row">' + g[1].join('') + '</div></div>';
+  }).join('');
+}
+
+/* ───────── drawing ───────── */
+var layer = L.layerGroup().addTo(map);
+
+function render() {
+  layer.clearLayers();
+  var z = map.getZoom();
+  // grid cell size in degrees shrinks as you zoom in; past z14 every person stands alone
+  var cell = z >= 14 ? 0 : 6 / Math.pow(2, z - 5);
+  var cells = {};
+  located.filter(visible).forEach(function (p) {
+    var ll = jitter[p.id];
+    var key = cell ? Math.round(ll[0] / cell) + ':' + Math.round(ll[1] / cell) : p.id;
+    (cells[key] = cells[key] || []).push(p);
+  });
+
+  // second pass: merge groups whose screen positions would collide
+  var blobs = Object.keys(cells).map(function (k) {
+    var list = cells[k], lat = 0, lng = 0;
+    list.forEach(function (p) { lat += jitter[p.id][0]; lng += jitter[p.id][1]; });
+    return { list: list, ll: L.latLng(lat / list.length, lng / list.length) };
+  });
+  function radius(n) { return n === 1 ? 15 : Math.min(64, 34 + Math.round(Math.sqrt(n) * 6)) / 2 + 4; }
+  var merged = true, guard = 0;
+  while (merged && guard++ < 12) {
+    merged = false;
+    for (var i = 0; i < blobs.length; i++) {
+      for (var j = i + 1; j < blobs.length; j++) {
+        var pa = map.latLngToLayerPoint(blobs[i].ll), pb = map.latLngToLayerPoint(blobs[j].ll);
+        if (pa.distanceTo(pb) < radius(blobs[i].list.length) + radius(blobs[j].list.length)) {
+          var all = blobs[i].list.concat(blobs[j].list), la = 0, ln = 0;
+          all.forEach(function (p) { la += jitter[p.id][0]; ln += jitter[p.id][1]; });
+          blobs[i] = { list: all, ll: L.latLng(la / all.length, ln / all.length) };
+          blobs.splice(j, 1); j--; merged = true;
+        }
+      }
+    }
+  }
+
+  /* Where each person ended up on screen, and how wide the thing they are
+     drawn inside is. The relation lines are trimmed to that edge, so a line
+     stops at a pin rather than vanishing under it. */
+  var spot = {};
+  blobs.forEach(function (blob) {
+    var list = blob.list;
+    if (list.length === 1) { spot[list[0].id] = { ll: jitter[list[0].id], r: 15 }; return; }
+    var wide = Math.min(72, 38 + Math.round(Math.sqrt(list.length) * 6)) / 2 + 3;
+    list.forEach(function (p) { spot[p.id] = { ll: blob.ll, r: wide }; });
+  });
+  /* Who the lines belong to. Worked out once: it decides both what is drawn
+     between the pins and which pins are ringed as being in the selection. */
+  var chosen = selectedPeople(), inSel = {};
+  chosen.forEach(function (p) { inSel[p.id] = 1; });
+  drawRelations(spot, chosen);
+
+  /* ── v2: stop the cluster breakdowns from landing on each other ───────────
+     Every cluster carried a permanent three-line "Levi 84 / Cohen 59 / …" tag
+     under it. At country zoom on a 390px screen those tags overlap — Tel Aviv's
+     sat across Haifa's circle and half of both was unreadable, which is most of
+     what made the map feel cluttered.
+
+     Greedy cull in screen space, biggest cluster first: a tag is drawn only if
+     its box does not touch a box already accepted. The circles and their counts
+     are never culled — only the breakdown, which is the part a reader gets by
+     tapping anyway. */
+  var hits = function (a, o) { return !(a.r < o.l || a.l > o.r || a.b < o.t || a.t > o.b); };
+  var taken = [];
+  var sizeOf = function (n) { return Math.min(72, 38 + Math.round(Math.sqrt(n) * 6)); };
+
+  /* The circles come first and are never negotiable — they are always drawn, so
+     a tag that lands on one loses whatever order they were considered in. This
+     is the part the first attempt missed: checking tags only against other tags
+     let a small cluster's breakdown sit squarely on a big cluster's donut. */
+  blobs.forEach(function (blob) {
+    var pt = map.latLngToContainerPoint(blob.ll);
+    var s = blob.list.length === 1 ? 26 : sizeOf(blob.list.length);
+    taken.push({ l: pt.x - s / 2, r: pt.x + s / 2, t: pt.y - s / 2, b: pt.y + s / 2 });
+  });
+
+  blobs.slice()
+    .sort(function (x, y) { return y.list.length - x.list.length; })
+    .forEach(function (blob) {
+      if (blob.list.length < 2) return;
+      var pt = map.latLngToContainerPoint(blob.ll);
+      var size = sizeOf(blob.list.length);
+      var fams = {};
+      blob.list.forEach(function (p) { fams[famKey(p)] = 1; });
+      var n = Object.keys(fams).length;
+      // A household says its address instead of its family breakdown, and an
+      // address is one line. Which family lives there is the question the pin's
+      // own colours already answer.
+      var lines = blobHousehold(blob.list) ? 1 : Math.min(3, n) + (n > 3 ? 1 : 0);
+      /* Matches .cluster-tag: ~19px a line plus padding, and a width that is a
+         fair guess at the longest family name at 12px. */
+      var box = {
+        l: pt.x - 80, r: pt.x + 80,
+        t: pt.y + size / 2 + 4, b: pt.y + size / 2 + 4 + lines * 19 + 8,
+      };
+      if (taken.some(function (o) { return hits(box, o); })) return;
+      taken.push(box);
+      blob._tag = true;
+    });
+
+  blobs.forEach(function (blob) {
+    var list = blob.list;
+    if (list.length === 1) {
+      var p = list[0], c = sh(p), ll = jitter[p.id];
+      // The one person a reader picked gets the glow; everyone else in the
+      // selection gets the ring alone, which is enough to say "and them".
+      var sel = state.person && String(p.no) === state.person;
+      var ring = sel || !!inSel[p.id];
+      // A dashed ring, in their OWN family's colour: here because they married
+      // in, and this is the family they came from.
+      var wed = marriedIn(p);
+      var m = L.marker(ll, {
+        icon: L.divIcon({
+          className: '', iconSize: [26, 46], iconAnchor: [13, 13],
+          // The halo, not the border, is what carries the selection: half the
+          // families are some shade of orange and an accent ring on an orange
+          // pin is no ring at all.
+          html: '<div class="pin' + (wed ? ' pin-wed' : '') + '" style="background:' + c.fill + ';color:' + c.ink + ';border-color:'
+                + (ring ? 'var(--color-accent)' : c.line)
+                + (ring ? ';box-shadow:0 0 0 ' + (sel ? '4px color-mix(in srgb, var(--color-accent) 35%' : '3px color-mix(in srgb, var(--color-accent) 26%') + ', transparent)' : '') + '">'
+                + esc(((p.first || ' ')[0] + (p.last || ' ')[0]).trim()) + '</div>'
+                + '<div class="pin-label">' + esc(personName(p)) + '</div>',
+        }),
+      });
+      m.on('click', function () { selectPerson(p); });
+      m.addTo(layer);
+      return;
+    }
+
+    var cities = {}, mix = {};
+    list.forEach(function (p) { cities[pKey(p)] = 1; mix[famKey(p)] = (mix[famKey(p)] || 0) + 1; });
+    var names = Object.keys(cities).map(placeLabel);
+    var keys = Object.keys(mix).sort(function (x, y) { return mix[y] - mix[x]; });
+    var size = Math.min(72, 38 + Math.round(Math.sqrt(list.length) * 6));
+    var at = 0, stops = keys.map(function (k) {
+      var a = at, b = at + (mix[k] / list.length) * 360; at = b;
+      return colorOf(k) + ' ' + a.toFixed(1) + 'deg ' + b.toFixed(1) + 'deg';
+    }).join(',');
+
+    /* ── one door ────────────────────────────────────────────────────────────
+       Everyone here lives at the same address, so this is not "three people the
+       map could not tell apart" — it is a household, and it says so: a roof, a
+       count, and the address under it rather than a family breakdown. */
+    if (blobHousehold(list)) {
+      var hp = list[0];
+      var hheld = list.some(function (p) { return inSel[p.id]; });
+      var hm = L.marker(blob.ll, {
+        icon: L.divIcon({
+          className: '', iconSize: [size, size + (blob._tag ? 30 : 4)], iconAnchor: [size / 2, size / 2],
+          html: '<div class="household' + (hheld ? ' household-sel' : '') + '" style="width:' + size + 'px;height:' + size
+                + 'px;font-size:' + (list.length > 9 ? 14 : 16) + 'px;background:conic-gradient(' + stops + ')">'
+                + '<span class="household-n">' + ROOF + '<b>' + list.length + '</b></span></div>'
+                + (blob._tag ? '<div class="pin-label">' + esc(addressLine(hp)) + '</div>' : ''),
+        }),
+      });
+      hm.on('click', function () { selectGroup(list, hm.getLatLng()); });
+      hm.addTo(layer);
+      return;
+    }
+    // A cluster is "chosen" when its people are the ones the lines come from —
+    // which stays true as you zoom and it breaks apart into ringed pins.
+    var held = list.some(function (p) { return inSel[p.id]; });
+    var tag = blob._tag
+      ? '<div class="cluster-tag">' + keys.slice(0, 3).map(function (k) {
+          return '<span><i style="background:' + colorOf(k) + '"></i><b>' + esc(labelOf(k)) + '</b> ' + mix[k] + '</span>';
+        }).join('') + (keys.length > 3 ? '<span style="opacity:.6">+' + (keys.length - 3) + '</span>' : '') + '</div>'
+      : '';
+    var marker = L.marker(blob.ll, {
+      icon: L.divIcon({
+        className: '', iconSize: [size, size + (tag ? 58 : 4)], iconAnchor: [size / 2, size / 2],
+        html: '<div class="cluster' + (held ? ' cluster-sel' : '') + '" style="width:' + size + 'px;height:' + size + 'px;font-size:'
+              + (list.length > 99 ? 15 : 17) + 'px;background:conic-gradient(' + stops + ')"><span class="cluster-n">'
+              + list.length + '</span></div>' + tag,
+      }),
+    });
+    marker.on('click', function () { selectGroup(list, marker.getLatLng()); });
+    marker.addTo(layer);
+  });
+}
+
+/* Inline rather than a font glyph or an image: the pins are built as HTML
+   strings inside a Leaflet divIcon, and this is the only mark on the map that
+   is not a letter or a number. */
+var ROOF = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor"'
+  + ' d="M8 1.7 1.2 7.1l.9 1.1L3 7.5V14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7.5l.9.7.9-1.1L8 1.7Z"/></svg>';
+
+function colorOf(key) { return FAM[key] ? FAM[key].sh.line : NEUTRAL.line; }
+function labelOf(key) { return FAM[key] ? famName(FAM[key]) : key; }
+
+/* ───────── the lines between people ───────── */
+/* Clicking somebody — or a cluster, or a settlement, the drawing is the same —
+ * draws the close family of everyone selected, in two hands that cannot be
+ * mistaken for one another:
+ *
+ *   * a line down the generations, parent → child, which grows as it goes and
+ *     ends in an arrowhead — so it reads as a direction along its whole length
+ *     and not only at the tip, which is where the pins and their labels are;
+ *   * a dashed line of even weight, no head, between siblings — a relation
+ *     with no direction, and nothing to mistake for one.
+ *
+ * Each line takes the colour of the family at the FAR end, so a line that
+ * leaves the family says so in the colour of the family it arrives at. Over
+ * map tiles a bare stroke disappears against a motorway, so every line is laid
+ * on a casing in the page's paper colour first.
+ *
+ * Everything here is recomputed on each render, because the trimming is in
+ * screen pixels: at z8 two pins are a thumb apart and at z16 they are a screen
+ * apart, and the same latlngs have to look right at both. */
+var PAPER = (getComputedStyle(document.documentElement).getPropertyValue('--color-bg') || '').trim() || '#f5ead8';
+/* Half-widths, in screen pixels, at the parent end and at the child end. A
+   descent line is a long thin wedge rather than a stroke — that is the whole
+   direction cue — so it is drawn as a polygon; siblings stay an ordinary
+   dashed stroke. */
+var WEDGE = { parent: 0.7, child: 1.9, casing: 1.7 };
+var SIB_WEIGHT = 2.2;
+
+/** The visible part of a line between two pins, or null if they are too close
+    together for one to read as a line at this zoom. */
+function trimmed(a, b) {
+  var A = map.latLngToLayerPoint(a.ll), B = map.latLngToLayerPoint(b.ll);
+  var dx = B.x - A.x, dy = B.y - A.y, len = Math.sqrt(dx * dx + dy * dy);
+  if (!len) return null;
+  var ux = dx / len, uy = dy / len, tail = a.r + 4, head = b.r + 6;
+  var span = len - tail - head;
+  if (span < 16) return null;
+  return {
+    a: L.point(A.x + ux * tail, A.y + uy * tail),
+    b: L.point(B.x - ux * head, B.y - uy * head),
+    ux: ux, uy: uy, nx: -uy, ny: ux, span: span,
+  };
+}
+
+/** The wedge itself: `w1` wide where the parent is, `w2` where the child is. */
+function wedge(seg, w1, w2) {
+  return [
+    map.layerPointToLatLng(L.point(seg.a.x + seg.nx * w1, seg.a.y + seg.ny * w1)),
+    map.layerPointToLatLng(L.point(seg.b.x + seg.nx * w2, seg.b.y + seg.ny * w2)),
+    map.layerPointToLatLng(L.point(seg.b.x - seg.nx * w2, seg.b.y - seg.ny * w2)),
+    map.layerPointToLatLng(L.point(seg.a.x - seg.nx * w1, seg.a.y - seg.ny * w1)),
+  ];
+}
+
+/** A chevron pointing the way the line goes, dropped on it at `at` of its length. */
+function chevron(seg, at) {
+  var x = seg.a.x + (seg.b.x - seg.a.x) * at, y = seg.a.y + (seg.b.y - seg.a.y) * at;
+  var reach = 4.6, wing = 5.4;
+  return [
+    map.layerPointToLatLng(L.point(x - seg.ux * reach + seg.nx * wing, y - seg.uy * reach + seg.ny * wing)),
+    map.layerPointToLatLng(L.point(x + seg.ux * reach, y + seg.uy * reach)),
+    map.layerPointToLatLng(L.point(x - seg.ux * reach - seg.nx * wing, y - seg.uy * reach - seg.ny * wing)),
+  ];
+}
+
+function drawRelations(spot, chosen) {
+  if (!chosen.length) return;
+  var casings = [], strokes = [], marks = [], drawn = {};
+  relationsAround(chosen).forEach(function (rel) {
+    var from = spot[rel.from.id], to = spot[rel.to.id];
+    if (!from || !to) return;                    // counted in the panel, not drawn
+    var seg = trimmed(from, to);
+    if (!seg) return;                            // same pin, or all but touching
+    var f = famOf(rel.other), col = (f ? f.sh : NEUTRAL).line;
+    // Four cousins in one cluster are four relations along one line on screen.
+    // Drawing it four times costs four paths and looks like one.
+    var same = [rel.kind, col, Math.round(seg.a.x), Math.round(seg.a.y),
+                Math.round(seg.b.x), Math.round(seg.b.y)].join(':');
+    if (drawn[same]) return;
+    drawn[same] = 1;
+
+    if (rel.kind === 'sib') {
+      var line = [map.layerPointToLatLng(seg.a), map.layerPointToLatLng(seg.b)];
+      casings.push(L.polyline(line, {
+        color: PAPER, weight: SIB_WEIGHT + 3.5, opacity: 0.85, lineCap: 'round', interactive: false,
+      }));
+      strokes.push(L.polyline(line, {
+        color: col, weight: SIB_WEIGHT, opacity: 0.95, lineCap: 'round',
+        dashArray: '2 7', interactive: false,
+      }));
+      return;
+    }
+
+    casings.push(L.polygon(wedge(seg, WEDGE.parent + WEDGE.casing, WEDGE.child + WEDGE.casing), {
+      stroke: false, fillColor: PAPER, fillOpacity: 0.85, interactive: false,
+    }));
+    strokes.push(L.polygon(wedge(seg, WEDGE.parent, WEDGE.child), {
+      stroke: false, fillColor: col, fillOpacity: 0.95, interactive: false,
+    }));
+
+    // The head, at the child's end. Leaflet has no arrows, and an SVG marker def
+    // would have to be minted per colour anyway.
+    var ang = Math.atan2(seg.uy, seg.ux), size = 11, spread = 0.44;
+    marks.push(L.polygon([
+      map.layerPointToLatLng(seg.b),
+      map.layerPointToLatLng(L.point(seg.b.x - size * Math.cos(ang - spread), seg.b.y - size * Math.sin(ang - spread))),
+      map.layerPointToLatLng(L.point(seg.b.x - size * Math.cos(ang + spread), seg.b.y - size * Math.sin(ang + spread))),
+    ], { color: PAPER, weight: 2, opacity: 0.85, fillColor: col, fillOpacity: 1, interactive: false }));
+
+    // On a long line the head is far from the middle of it, and a line whose
+    // ends are both under a label reads as no direction at all. One chevron
+    // partway along says which way it runs without turning into a dotted rule.
+    if (seg.span > 90) {
+      marks.push(L.polyline(chevron(seg, seg.span > 260 ? 0.4 : 0.52), {
+        color: col, weight: 2.4, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false,
+      }));
+      if (seg.span > 260) {
+        marks.push(L.polyline(chevron(seg, 0.72), {
+          color: col, weight: 2.4, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false,
+        }));
+      }
+    }
+  });
+  // Casings first, all of them: drawn line by line, one relation's casing would
+  // rub out the neighbouring relation's stroke where the two cross.
+  casings.forEach(function (l) { l.addTo(layer); });
+  strokes.forEach(function (l) { l.addTo(layer); });
+  marks.forEach(function (l) { l.addTo(layer); });
+}
+
+/* ───────── the trail: back and forward through people already opened ────────
+   The same walk the tree page keeps, for the same reason: following relatives
+   from one card to the next is how this map gets read, and `syncUrl` writes
+   the address bar with replaceState (every pan and zoom goes through it), so
+   the browser's own Back has nothing of that walk in it.
+
+   `hist` holds person NUMBERS, which is what `state.person` is and what the
+   URL carries — never a slug. Opening somebody new from the middle drops what
+   was ahead, exactly like a browser. Not persisted and not in the URL: a link
+   pasted into the family group should hand over a place, not a journey. */
+var hist = [], histAt = -1;
+function noteVisit(no) {
+  no = String(no || '');
+  if (!no || hist[histAt] === no) return;
+  hist = hist.slice(0, histAt + 1).concat([no]);
+  if (hist.length > 60) hist = hist.slice(hist.length - 60);
+  histAt = hist.length - 1;
+}
+/* The map — unlike the tree — really does push a history entry per selection,
+   so the browser's own Back moves between people here too. When it does, the
+   trail must move WITH it rather than record the arrival as a new step: a
+   browser Back onto the previous person is that person, not a fresh visit, and
+   treating it as one would leave the forward arrow pointing at somebody the
+   reader never went forward from. Only an arrival that is neither neighbour is
+   a new step. */
+function histSyncTo(no) {
+  no = String(no || '');
+  if (!no || hist[histAt] === no) return;
+  if (hist[histAt - 1] === no) { histAt--; return; }
+  if (hist[histAt + 1] === no) { histAt++; return; }
+  noteVisit(no);
+}
+/* Where a press would land, or -1. Anyone the data no longer knows about —
+   deleted in another tab, or a `?p=` for a number that has gone — is stepped
+   over rather than offered as a stop that opens nothing. */
+function histTarget(dir) {
+  for (var i = histAt + dir; i >= 0 && i < hist.length; i += dir) if (byNo[hist[i]]) return i;
+  return -1;
+}
+function histGo(dir) {
+  var i = histTarget(dir);
+  if (i < 0) return;
+  histAt = i;
+  // The same landing a pin click or a relative chip produces, with the trail
+  // held still — this IS the trail moving.
+  goToPerson(byNo[hist[i]], true);
+}
+/* Dimmed at the ends rather than disabled, so the pair does not change width
+   under the reader's thumb as they walk; histGo() clamps either way. */
+function paintHistNav() {
+  var wrap = document.getElementById('sheetNav');
+  if (!wrap) return;
+  wrap.hidden = !state.person;
+  if (wrap.hidden) return;
+  [[-1, 'sheetPrev', 'histPrev', 'histTo'], [1, 'sheetNext', 'histNext', 'histToNext']].forEach(function (row) {
+    var i = histTarget(row[0]);
+    var btn = document.getElementById(row[1]);
+    var label = i < 0 ? T[row[2]] : T[row[3]](personName(byNo[hist[i]]));
+    btn.style.opacity = i < 0 ? '0.3' : '1';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  });
+}
+
+/* Selecting somebody is a redraw and not just a panel: the halo on their pin and
+   the lines to their relatives are both render()'s work. */
+function selectPerson(p) {
+  noteVisit(p.no);
+  state.person = String(p.no || '');
+  state.city = '';
+  state.group = [];
+  syncUrl(true);
+  render();
+  paintSheet();
+}
+
+/* Clicking a cluster keeps its old job — it drills in two zoom levels — and now
+   also holds on to the people it contained, by number. The zoom that follows
+   pulls them apart into separate pins, and the lines redraw from wherever each
+   of them lands. */
+function selectGroup(list, ll) {
+  state.group = list.map(function (p) { return String(p.no || ''); }).filter(Boolean);
+  state.person = '';
+  state.city = '';
+  syncUrl(true);
+  render();
+  paintSheet();
+  map.setView(ll, Math.min(17, map.getZoom() + 2));
+}
+
+/** Nobody, and nothing said about nobody. */
+function clearSelection(push) {
+  if (!state.person && !state.city && !state.group.length) return false;
+  // The search box named what was selected; letting go of the selection has to
+  // let go of the name too, or it reads as a filter that is still on.
+  if (typeof qEl !== 'undefined' && qEl) qEl.value = '';
+  state.person = '';
+  state.city = '';
+  state.group = [];
+  syncUrl(!!push);
+  render();
+  paintSheet();
+  return true;
+}
+
+/* ───────── the details panel ───────── */
+/* A card pinned to a marker is the wrong shape for this: on a phone it covered
+   the map it was describing, and the thing a reader wants to keep looking at is
+   the map. The panel is docked at the side instead, and the part that grows
+   without bound — the list of people in a group — is behind a chevron. */
+var sheetEl = document.getElementById('sheet');
+var sheetName = document.getElementById('sheetName');
+var sheetSub = document.getElementById('sheetSub');
+var sheetBody = document.getElementById('sheetBody');
+function roomForSheet() { return window.innerWidth >= 700; }
+var sheetOpen = roomForSheet();
+
+/* The contact row, on the map's own sheet.
+ *
+ * The same four buttons the tree draws and the same rule for who gets them —
+ * FamilyContacts.linksFor() makes both judgements, so a person who has an
+ * Instagram on one page has it on the other and the dead have it on neither.
+ * Written as a string because this sheet is innerHTML; the tree hands the same
+ * data to its template runtime instead.
+ *
+ * Guarded on the function, not just the object: this page is installable and
+ * /app/* is cached separately from the document, so a phone can hold a copy of
+ * contacts.js older than this file. No module means no row, not a throw. */
+function contactRowHtml(p) {
+  var CN = globalThis.FamilyContacts;
+  if (!CN || typeof CN.linksFor !== 'function') return '';
+  var links = CN.linksFor(p, T.contactNames || {});
+  if (!links.length) return '';
+  return '<div class="contact-row" style="margin:8px 0 2px">' + links.map(function (c) {
+    return '<a class="contact-btn" href="' + esc(c.url) + '" target="_blank" rel="noopener noreferrer"'
+      + ' title="' + esc(c.title) + '" aria-label="' + esc(c.title) + '"'
+      + ' style="--cbrand:' + esc(c.brand) + '">'
+      + '<span class="ci" style="background-image:' + c.icon + '"></span></a>';
+  }).join('') + '</div>';
+}
+
+function personSheet(p) {
+  var f = famOf(p);
+  var into = marriedIn(p) ? FAM[spouseFam[p.id]] : null;
+  return {
+    title: personName(p),
+    sub: esc([addressLine(p), lifeLine(p)].filter(Boolean).join(' · ')) + relKey(relSummary([p])),
+    body: (f ? '<div style="margin:2px 0 4px"><span class="tag" style="background:' + f.sh.fill + ';color:' + f.sh.ink + '">'
+        + esc(famName(f)) + '</span>'
+        + (into ? '<span class="tag" style="margin-inline-start:5px;border:1px dashed ' + into.sh.line + ';color:'
+            + into.sh.ink + '">' + esc(T.wedInto(famName(into))) + '</span>' : '')
+        + '</div>' : '')
+      + contactRowHtml(p)
+      + seenHtml(p)
+      + '<a class="pop-link" href="' + treeHref(p) + '">' + esc(T.openInTree) + ' ›</a>'
+      + originBarHtml(p.originMix)
+      // Last, because it is the only part of a person's sheet that grows: the
+      // three lines above it stay put whoever is selected.
+      + kinHtml(p),
+  };
+}
+
+/* Several people at once: a cluster that was clicked, or a settlement that was
+   searched for. `title` is the settlement's name where there is one name to
+   give, and how many settlements it covers where there is not. */
+function groupSheet(list, title) {
+  var cities = {}, mix = {};
+  list.forEach(function (p) { cities[pKey(p)] = 1; mix[famKey(p)] = (mix[famKey(p)] || 0) + 1; });
+  var names = Object.keys(cities).map(placeLabel);
+  var keys = Object.keys(mix).sort(function (x, y) { return mix[y] - mix[x]; });
+  /* A household is titled by its door rather than by its town — "עומר" over a
+     list of four people who all live at נורית 34 answers a question nobody
+     asked. Only when the reader has not already picked a town, whose name is
+     the title they asked for. */
+  var house = !title && blobHousehold(list) ? list[0] : null;
+  return {
+    title: house ? addressLine(house)
+      : title || (names.length === 1 ? names[0] : T.places(names.length)),
+    sub: (house ? esc(T.household) + ' · ' : '') + esc(T.peopleIn(list.length)) + ' · '
+      + keys.map(function (k) { return esc(labelOf(k)) + ' ' + mix[k]; }).join(' · ')
+      + relKey(relSummary(list)),
+    /* Above the list of names, not below it: "what is this settlement made of"
+       is the question the map is for, and under forty rows nobody would find
+       the answer. A share too small to name is still drawn — see originBarHtml. */
+    body: originBarHtml(globalThis.FamilyOrigin.groupMix(list), 0.03)
+      + '<ul class="pop-list" style="margin-top:10px">' + list.slice(0, 40).map(personRow).join('') + '</ul>'
+      + (list.length > 40 ? '<div style="font-size:12px;margin-top:6px">' + esc(T.andMore(list.length - 40)) + '</div>' : ''),
+  };
+}
+
+/* Open or folded is decided per selection and then left to the reader: one
+   person is three lines and always opens, a group is a list of forty and opens
+   only where there is room for it. Toggling by hand sticks until the selection
+   changes under it. */
+var sheetKey = null;
+function selectionKey() {
+  if (state.person) return 'p:' + state.person;
+  if (state.group.length) return 'g:' + state.group.join(',');
+  return state.city ? 'c:' + state.city : '';
+}
+
+function paintSheet() {
+  var list = selectedPeople();
+  var parts = state.person && byNo[state.person] ? personSheet(byNo[state.person])
+    : list.length ? groupSheet(list, placeLabel(state.city)) : null;
+  if (!parts) {
+    sheetEl.hidden = true; sheetKey = null;
+    /* Lets the legend and the attribution have the bottom corner back. */
+    document.body.classList.remove('has-sheet');
+    return;
+  }
+  var key = selectionKey();
+  var fresh = key !== sheetKey;
+  if (fresh) {
+    sheetKey = key;
+    sheetOpen = !!state.person || roomForSheet();
+    /* A new selection reopens at half on a phone: one person is a name and
+       three lines, and a group is a list — half shows the top of either without
+       burying the map. */
+    if (narrowMap()) { sheetStop = 'half'; sheetDragPx = null; }
+  }
+  document.body.classList.add('has-sheet');
+  sheetEl.hidden = false;
+  sheetName.textContent = parts.title;
+  sheetSub.innerHTML = parts.sub;
+  sheetBody.innerHTML = parts.body;
+  sheetBody.hidden = !sheetOpen;
+  document.getElementById('sheetToggle').setAttribute('aria-expanded', sheetOpen ? 'true' : 'false');
+  document.getElementById('sheetChevron').style.transform = sheetOpen ? 'none' : 'rotate(-90deg)';
+  document.getElementById('sheetClose').setAttribute('aria-label', T.close);
+  document.getElementById('sheetClose').title = T.close;
+  paintHistNav();
+  placeSheet();
+  /* After the sheet has its height, not before — panSheet measures it. Deferred
+     one frame so Leaflet sees the final container size. */
+  if (fresh) requestAnimationFrame(panSheet);
+}
+
+/* The panel hangs under the toolbar, which is one row on a laptop and two or
+   three on a phone — so where it starts is measured rather than guessed. On a
+   wide screen it has its own column and can run to the bottom of the window; on
+   a phone the legend is in that same column, and the panel stops above it. */
+function placeSheet() {
+  if (sheetEl.hidden) return;
+
+  /* ── v2: on a phone this is a bottom sheet, not a top-docked side panel ───
+     The old geometry put a 3/4-width card over the middle of the screen, which
+     covered about 78% of the map and — the part that actually mattered — covered
+     the pin it was describing. A bottom sheet leaves a strip of map above it,
+     and panSheet() below moves the pin into that strip. */
+  if (narrowMap()) {
+    sheetEl.style.top = '';
+    sheetEl.style.maxHeight = '';
+    /* On the root, not on the sheet: custom properties inherit, and the
+       attribution — which has to stay above the sheet to keep the OSM credit
+       visible — is nowhere near it in the DOM. */
+    document.documentElement.style.setProperty('--sheet-h', sheetPx() + 'px');
+    return;
+  }
+
+  document.documentElement.style.removeProperty('--sheet-h');
+  var bar = document.getElementById('topbar');
+  var top = bar ? bar.getBoundingClientRect().bottom + 10 : 70;
+  var floor = window.innerHeight - 18;
+  var legend = document.querySelector('.legend-box').getBoundingClientRect();
+  var box = sheetEl.getBoundingClientRect();
+  if (legend.width && box.right > legend.left && box.left < legend.right) {
+    floor = Math.min(floor, legend.top - 10);
+  }
+  sheetEl.style.top = Math.round(top) + 'px';
+  sheetEl.style.maxHeight = Math.max(110, Math.round(floor - top)) + 'px';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v2 — the bottom sheet
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function narrowMap() { return window.innerWidth <= 760; }
+
+/* Three stops, the same idea as the tree page's: a peek that says the card is
+   there, a half that shows the name and the counts, and a full for the list of
+   forty people a settlement can hold. */
+var sheetStop = 'half';
+var sheetDragPx = null;
+function sheetStops() {
+  var h = window.innerHeight;
+  return { peek: 96, half: Math.round(h * 0.42), full: Math.round(h * 0.86) };
+}
+function sheetPx() {
+  if (sheetDragPx != null) return sheetDragPx;
+  var st = sheetStops();
+  return st[sheetStop] || st.half;
+}
+
+/* Move the map so the thing the card describes is in the strip of map the card
+   is not covering. Without this, tapping a pin hides that pin — which is the
+   single worst thing a map card can do. */
+function panSheet() {
+  if (!narrowMap() || sheetEl.hidden) return;
+  var target = selectedLatLng();
+  if (!target) return;
+  var size = map.getSize();
+  /* The visible strip runs from under the toolbar to the top of the sheet; aim
+     for its middle. */
+  var bar = document.getElementById('topbar');
+  var top = bar ? bar.getBoundingClientRect().bottom + 12 : 70;
+  var visibleBottom = size.y - sheetPx();
+  if (visibleBottom - top < 80) return;   // no strip worth aiming at
+  var wantY = (top + visibleBottom) / 2;
+  var pt = map.latLngToContainerPoint(target);
+  var dy = pt.y - wantY;
+  var dx = pt.x - size.x / 2;
+  if (Math.abs(dy) < 24 && Math.abs(dx) < 24) return;
+  map.panBy([dx, dy], { animate: true, duration: 0.35 });
+}
+
+/* Whatever the sheet is currently about, as a point on the map. `jitter` is
+   where a pin actually sits — the exact address where one resolved, otherwise a
+   stable spread around the middle of the town — so it is the right thing to aim
+   at rather than the settlement centroid. */
+function pinOf(p) { return p && jitter[p.id] ? L.latLng(jitter[p.id]) : null; }
+
+function selectedLatLng() {
+  if (state.person && byNo[state.person]) {
+    var pin = pinOf(byNo[state.person]);
+    if (pin) return pin;
+  }
+  var list = selectedPeople();
+  if (!list.length) return null;
+  var pts = list.map(pinOf).filter(Boolean);
+  if (!pts.length) return null;
+  return L.latLngBounds(pts).getCenter();
+}
+
+(function wireSheetGrip() {
+  var grip = document.getElementById('sheetGrip');
+  if (!grip) return;
+  var start = null;
+  var moved = false;
+  grip.addEventListener('pointerdown', function (e) {
+    if (!narrowMap()) return;
+    start = { y: e.clientY, h: sheetPx() };
+    moved = false;
+    sheetEl.classList.add('dragging');
+    try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!start) return;
+    var dy = start.y - e.clientY;          // up is taller
+    if (Math.abs(dy) > 5) moved = true;
+    var st = sheetStops();
+    sheetDragPx = Math.max(st.peek, Math.min(st.full, start.h + dy));
+    document.documentElement.style.setProperty("--sheet-h", sheetDragPx + "px");
+  });
+  var end = function () {
+    if (!start) return;
+    start = null;
+    sheetEl.classList.remove('dragging');
+    var st = sheetStops();
+    var h = sheetDragPx != null ? sheetDragPx : st.half;
+    var best = 'half', bestD = Infinity;
+    ['peek', 'half', 'full'].forEach(function (k) {
+      var d = Math.abs(st[k] - h);
+      if (d < bestD) { bestD = d; best = k; }
+    });
+    sheetStop = best;
+    sheetDragPx = null;
+    placeSheet();
+    panSheet();
+  };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  /* Tap cycles, for anyone who does not think to drag and for a keyboard. */
+  grip.addEventListener('click', function () {
+    if (moved) { moved = false; return; }
+    if (!narrowMap()) return;
+    var order = ['peek', 'half', 'full'];
+    sheetStop = order[(order.indexOf(sheetStop) + 1) % order.length];
+    sheetDragPx = null;
+    placeSheet();
+    panSheet();
+  });
+}());
+
+/* What the two kinds of line mean, said where the lines were just drawn rather
+   than in the legend at the other end of the screen. Relatives the map cannot
+   place are counted out loud for the same reason the missing settlements are:
+   a person with eight children and two lines needs to know why. */
+/* The two swatches are the marks themselves at reading size — the wedge that
+   widens into a head, and the even dashes — rather than two rules a reader has
+   to take on trust. They point the way the page reads, so the wedge in Hebrew
+   runs right to left like everything around it. */
+function relMark(kind) {
+  var flip = he() ? ' transform="scale(-1 1) translate(-26 0)"' : '';
+  var body = kind === 'desc'
+    ? '<path d="M1 5.15 L14 4.1 L14 5.9 Z" fill="currentColor"/>'
+      + '<path d="M13.5 1.7 L20 5 L13.5 8.3 Z" fill="currentColor"/>'
+    : '<path d="M1 5 H24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 6"/>';
+  return '<svg class="rk" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><g' + flip + '>'
+    + body + '</g></svg>';
+}
+
+function relKey(sum) {
+  if (!sum.desc && !sum.sib && !sum.off) return '';
+  var bits = [];
+  if (sum.desc) bits.push('<span>' + relMark('desc') + sum.desc + ' ' + esc(T.relDesc) + '</span>');
+  if (sum.sib) bits.push('<span>' + relMark('sib') + sum.sib + ' ' + esc(T.relSib) + '</span>');
+  if (sum.off) bits.push('<span class="rk-off">' + esc(T.relOff(sum.off)) + '</span>');
+  return '<div class="pop-rel">' + bits.join('') + '</div>';
+}
+
+/* ───────── focusing something the URL asked for ───────── */
+
+function focusPerson(no, opts) {
+  var p = byNo[no];
+  if (!p || !jitter[p.id]) return false;
+  // A link to a person outranks a filter that would hide them — either filter,
+  // and both are cleared, since clearing only the one that happened to be
+  // checked first can still leave them hidden by the other.
+  if (!visible(p)) { state.only = []; state.origins = []; syncUrl(false); renderLegend(); paintTreeLink(); }
+  map.setView(jitter[p.id], Math.max(map.getZoom(), 15), { animate: !!(opts && opts.animate) });
+  render();
+  paintSheet();
+  return true;
+}
+
+function focusCity(key, opts) {
+  var place = PLACE[key];
+  if (!place) return false;
+  map.setView([place.lat, place.lng], Math.max(map.getZoom(), 12), { animate: !!(opts && opts.animate) });
+  render();
+  paintSheet();
+  return true;
+}
+
+/* A link to a group — someone copied one, or pressed Back onto one. The people
+   are known by number, so the view is fitted around wherever they are now
+   rather than around the cluster that happened to hold them when it was made. */
+function focusGroup(nos, opts) {
+  var pts = nos.map(function (n) { return byNo[n]; })
+    .filter(function (p) { return p && jitter[p.id]; })
+    .map(function (p) { return L.latLng(jitter[p.id]); });
+  if (!pts.length) return false;
+  if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [80, 80], maxZoom: 16, animate: !!(opts && opts.animate) });
+  else map.setView(pts[0], Math.max(map.getZoom(), 15), { animate: !!(opts && opts.animate) });
+  render();
+  paintSheet();
+  return true;
+}
+
+/* ───────── the legend, where a family's colour lives ───────── */
+var pending = {};
+/* Thirteen families is a tall list, and on a phone the legend was eating the
+   map. Collapsed by default on a narrow screen, open on a wide one; either way
+   the header still says how many families are on. */
+var legendOpen = window.innerWidth >= 640;
+/* Closed by default: the notes are a thing you read once. */
+var legendInfoOpen = false;
+function renderLegend() {
+  var shownCount = state.only.length || FAM_ORDER.filter(function (k) { return FAM[k].count > 0; }).length;
+  document.getElementById('legendTitle').textContent = T.families + ' · ' + shownCount;
+  var toggle = document.getElementById('legendToggle');
+  toggle.setAttribute('aria-expanded', legendOpen ? 'true' : 'false');
+  document.getElementById('legendChevron').style.transform = legendOpen ? 'none' : 'rotate(-90deg)';
+  document.getElementById('legend').hidden = !legendOpen;
+  /* v2: the notes are behind the ⓘ, not stapled under the list. Folding the
+     legend closes both; opening it does not reopen the prose. */
+  document.getElementById('legendFoot').hidden = !(legendOpen && legendInfoOpen);
+  document.getElementById('legendCount').hidden = !legendOpen;
+  var info = document.getElementById('legendInfo');
+  info.hidden = !legendOpen;
+  info.setAttribute('aria-expanded', legendInfoOpen ? 'true' : 'false');
+  info.setAttribute('aria-label', T.hintLabel || 'i');
+  info.title = T.hintLabel || '';
+  var all = document.getElementById('famAll');
+  all.textContent = T.showAll;
+  all.hidden = !state.only.length;
+  all.onclick = function () { state.only = []; syncUrl(true); render(); renderLegend(); };
+
+  var box = document.getElementById('legend');
+  box.textContent = '';
+  FAM_ORDER.map(function (k) { return FAM[k]; })
+    .filter(function (f) { return f.count > 0; })
+    .forEach(function (f) {
+      var on = !state.only.length || state.only.indexOf(f.key) >= 0;
+      var row = document.createElement('div');
+      row.className = 'fam-row';
+
+      var swatch = document.createElement('label');
+      swatch.className = 'swatch';
+      swatch.style.background = f.sh.line;
+      swatch.title = T.colorTitle(famName(f));
+      var input = document.createElement('input');
+      input.type = 'color';
+      input.value = f.color;
+      input.setAttribute('aria-label', T.colorTitle(famName(f)));
+      // `input` repaints as the picker moves; `change` is the decision, and the
+      // only thing worth telling the server about.
+      input.addEventListener('input', function () { paintFamily(f, input.value); });
+      input.addEventListener('change', function () { saveFamilyColor(f, input.value); });
+      swatch.appendChild(input);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fam-toggle';
+      btn.style.borderColor = on ? f.sh.edge : 'transparent';
+      btn.style.background = on ? f.sh.fill : 'transparent';
+      btn.style.color = on ? f.sh.ink : 'color-mix(in srgb, var(--color-text) 45%, transparent)';
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      // The name and the count are one line of their own now that a second one
+      // sits under them; without the wrapper they would share a flex row with
+      // it and the count would drift to the end of whichever was longer.
+      var head = document.createElement('span');
+      head.className = 'head';
+      var nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = famName(f);
+      // Born into the family, then how many married in — because the filter
+      // draws both and a bare "20" beside 23 pins reads as a bug. What the `+`
+      // means is in the legend's explanation too: this title is a tooltip, and
+      // most of the people reading this are on a phone.
+      var n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = f.count + (wedCount[f.key] ? ' +' + wedCount[f.key] : '');
+      n.title = wedCount[f.key] ? T.bornPlusWed(f.count, wedCount[f.key]) : '';
+      head.appendChild(nm); head.appendChild(n);
+      btn.appendChild(head);
+
+      // How the reader reaches this family. Absent for a reader the tree has
+      // not placed — see famKin() — and the row is then the row it always was.
+      var kinLine = famKin()[f.key];
+      if (kinLine) {
+        var kin = document.createElement('span');
+        kin.className = 'kin';
+        kin.textContent = kinLine;
+        kin.title = kinLine;
+        btn.appendChild(kin);
+      }
+      // The strip draws every share — it carries no labels, so nothing is
+      // gained by dropping the thin ones and the proportions stay true. The
+      // tooltip is its whole legend.
+      var segs = globalThis.FamilyOrigin.segmentsOf(
+        globalThis.FamilyOrigin.groupMix(famMembers[f.key] || []));
+      if (segs.length) {
+        var bar = document.createElement('span');
+        bar.className = 'obar';
+        bar.style.background = globalThis.FamilyOrigin.barCss(segs, T.dir === 'rtl', 1);
+        bar.style.opacity = on ? '1' : '0.25';
+        btn.title = originTip(segs);
+        btn.appendChild(bar);
+      }
+      btn.onclick = function () { toggleFamily(f.key); };
+
+      row.appendChild(swatch); row.appendChild(btn);
+      box.appendChild(row);
+    });
+
+  var foot = document.getElementById('legendFoot');
+  var notes = [];
+  if (wedAny) notes.push(T.plusNote);
+  if (state.only.length) notes.push(T.wedNote);
+  if (noCity) notes.push(T.noCity(noCity));
+  if (unmapped) notes.push(T.unmapped(unmapped));
+  /* Where the rest of the family is. Counted off the pins actually drawn, so it
+     goes away by itself when the filter above hides them and never claims
+     somebody is on a map they are not on. */
+  if (ABROAD_COUNT.n) notes.push(T.abroad(ABROAD_COUNT.n, ABROAD_COUNT.where));
+  notes.push(T.relHint);
+  notes.push(T.hint);
+  foot.textContent = notes.join(' ');
+  /* The line the hidden title card used to carry, next to the families it is
+     counting. On a laptop the title card is still there and says it too — one
+     of them is redundant at that width, and the redundant one is the cheap one
+     to keep. */
+  document.getElementById('legendCount').textContent = T.counted(located.length, PEOPLE.length);
+  renderFilters();
+  // Folding the legend gives the panel back the room it was avoiding.
+  placeSheet();
+}
+
+/* ───────── the two filter buttons ─────────
+ * One builder for both, because the only things that differ are the list, the
+ * colour of a row and what a click does. Selection is shown by a tick and a
+ * tinted row rather than by dimming the others: a menu where "nothing selected"
+ * and "everything selected" look identical is how the legend version managed to
+ * be invisible.
+ */
+function buildMenu(menu, btn, opts) {
+  btn.classList.toggle('on', !!opts.chosen.length);
+  btn.querySelector('.lbl').textContent = opts.label;
+  btn.querySelector('.cnt').textContent = opts.chosen.length ? opts.chosen.length : '';
+  btn.title = opts.chosen.length ? opts.chosen.map(opts.nameOf).join(' · ') : opts.hint;
+
+  menu.textContent = '';
+  var clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'filter-clear';
+  clear.textContent = opts.clearLabel;
+  clear.hidden = !opts.chosen.length;
+  clear.onclick = opts.onClear;
+  menu.appendChild(clear);
+
+  opts.keys.forEach(function (k) {
+    var on = opts.chosen.indexOf(k) >= 0;
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'filter-row';
+    row.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) {
+      row.style.background = 'color-mix(in srgb, ' + opts.colorOf(k) + ' 15%, transparent)';
+      row.style.borderColor = 'color-mix(in srgb, ' + opts.colorOf(k) + ' 55%, transparent)';
+    }
+    var tick = document.createElement('span');
+    tick.className = 'tick';
+    tick.textContent = '✓';
+    var sw = document.createElement('span');
+    sw.className = 'sw';
+    sw.style.background = opts.colorOf(k);
+    var nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = opts.nameOf(k);
+    var n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = opts.countOf(k);
+    row.appendChild(tick); row.appendChild(sw); row.appendChild(nm); row.appendChild(n);
+    /* A second line where the menu has something to say about the entry — how
+       the reader is related to that family. Optional, because the origins menu
+       beside it has no such thing: a country is not related to anybody. */
+    var sub = opts.subOf && opts.subOf(k);
+    if (sub) {
+      var s = document.createElement('span');
+      s.className = 'sub';
+      s.textContent = sub;
+      s.title = sub;
+      row.appendChild(s);
+    }
+    row.onclick = function () { opts.onPick(k); };
+    menu.appendChild(row);
+  });
+}
+
+function renderFilters() {
+  var O = globalThis.FamilyOrigin;
+  buildMenu(document.getElementById('famMenu'), document.getElementById('famBtn'), {
+    label: T.families, hint: T.familyFilterHint, clearLabel: T.showAllFamilies,
+    keys: FAM_ORDER.filter(function (k) { return FAM[k].count > 0; }),
+    chosen: state.only,
+    colorOf: function (k) { return FAM[k].sh.line; },
+    nameOf: function (k) { return famName(FAM[k]); },
+    countOf: function (k) { return FAM[k].count + (wedCount[k] ? ' +' + wedCount[k] : ''); },
+    subOf: function (k) { return famKin()[k] || ''; },
+    onPick: toggleFamily,
+    onClear: function () { state.only = []; syncUrl(true); render(); renderLegend(); },
+  });
+  buildMenu(document.getElementById('orgMenu'), document.getElementById('orgBtn'), {
+    label: T.origins, hint: T.anyShare, clearLabel: T.showAllOrigins,
+    keys: ORIGIN_KEYS,
+    chosen: state.origins,
+    colorOf: function (c) { return O.colorOf(c); },
+    nameOf: originLabel,
+    countOf: function (c) { return ORIGIN_COUNT[c]; },
+    onPick: toggleOrigin,
+    onClear: function () { state.origins = []; syncUrl(true); render(); renderLegend(); },
+  });
+}
+
+/* Open one menu at a time, and let the map have the click that closes it. */
+function closeMenus(except) {
+  [['famBtn', 'famMenu'], ['orgBtn', 'orgMenu']].forEach(function (pair) {
+    if (pair[1] === except) return;
+    document.getElementById(pair[1]).hidden = true;
+    document.getElementById(pair[0]).setAttribute('aria-expanded', 'false');
+  });
+}
+[['famBtn', 'famMenu'], ['orgBtn', 'orgMenu']].forEach(function (pair) {
+  var btn = document.getElementById(pair[0]), menu = document.getElementById(pair[1]);
+  btn.onclick = function (e) {
+    e.stopPropagation();
+    var open = menu.hidden;
+    closeMenus(open ? pair[1] : null);
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  // A click inside is a selection, not a dismissal — the menus are multi-select
+  // and closing on the first pick would make picking two a chore.
+  menu.onclick = function (e) { e.stopPropagation(); };
+});
+document.addEventListener('click', function () { closeMenus(null); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(null); });
+
+/* Same gesture as a family row, so the two lists behave identically: the first
+   click solos, later clicks add, and unpicking the last one clears the filter
+   rather than leaving a view with nobody in it. */
+function toggleOrigin(c) {
+  var i = state.origins.indexOf(c);
+  if (!state.origins.length) state.origins = [c];
+  else if (i >= 0) state.origins.splice(i, 1);
+  else state.origins.push(c);
+  syncUrl(true);
+  render();
+  renderLegend();
+}
+
+/* First click on a family solos it — that is the view somebody wants a link to.
+   Clicking another adds it; clicking the last one selected clears the filter. */
+function toggleFamily(key) {
+  var i = state.only.indexOf(key);
+  if (!state.only.length) state.only = [key];
+  else if (i >= 0) state.only.splice(i, 1);
+  else state.only.push(key);
+  // A filter changes who is on the map, so it cannot leave behind a selection
+  // made out of the people who were on it a moment ago — nor the panel that
+  // described them.
+  state.person = '';
+  state.group = [];
+  state.city = '';
+  syncUrl(true);
+  render();
+  renderLegend();
+  paintSheet();
+}
+
+function paintFamily(f, hex) {
+  f.color = hex;
+  f.sh = FamilyColors.shades(hex);
+  render();
+  renderLegend();
+}
+
+function saveFamilyColor(f, hex) {
+  var before = pending[f.key] === undefined ? f.color : pending[f.key];
+  pending[f.key] = before;
+  fetch('/api/families/' + encodeURIComponent(f.key), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ color: hex }),
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (out) {
+      if (!out.ok) throw new Error((out.j && (he() ? out.j.error : out.j.error_en || out.j.error)) || T.saveFailed);
+      delete pending[f.key];
+    })
+    .catch(function (err) {
+      // The colour is already on screen, so a rejected save has to be taken back
+      // or the family believes they changed something they did not.
+      paintFamily(f, before);
+      delete pending[f.key];
+      toast(err.message || T.saveFailed);
+    });
+}
+
+/* ───────── the search list: people, then places ───────── */
+/* Matching lives in /app/fuzzy.js, shared with the tree's own search box and
+   with the address pickers in its person form — one ranking, so a search box
+   behaves the same in all three places.
+ *
+ * People and settlements share the one box rather than sitting in two, because
+ * a reader looking at a map of the family types a name without first deciding
+ * which kind of thing it is. "עומר" is both a given name and a town; the list says
+ * which is which and lets them pick. A person outranks a place at the same
+ * score — the map is of the family, not of Israel. */
+
+/* A town abroad answers to its country's name as well as its own, in both
+   languages: somebody looking for the relatives in Italy types "Italy", not
+   "Rome", and a search that only knew town names would tell them there is
+   nobody there. */
+function placeSearchText(place) {
+  if (!foreign(place.country)) return place.name;
+  return [place.name, CO.name(place.country, 'he'), CO.name(place.country, 'en'), place.country]
+    .filter(Boolean).join(' ');
+}
+
+var qEl = document.getElementById('q'), listEl = document.getElementById('qlist');
+var cursor = -1, matches = [];
+
+/* Only people the URL can name: `p=` carries the person number, and someone
+   without one cannot be linked to, come back on Back, or be found again. */
+var SEARCH_PEOPLE = PEOPLE.filter(function (p) { return p.no; });
+
+function searchItems(q) {
+  // An empty box is somebody who just clicked it — the settlement list is the
+  // useful thing to browse there, and 300 names ranked by nothing is not.
+  if (!String(q || '').trim()) {
+    return FamilyFuzzy.rank('', PLACE_LIST, {
+      key: function (p) { return placeSearchText(p); },
+      weight: function (p) { return p.count; },
+      limit: 30,
+    }).map(function (p) { return { kind: 'place', place: p }; });
+  }
+  var items = SEARCH_PEOPLE.map(function (p) { return { kind: 'person', p: p }; })
+    .concat(PLACE_LIST.map(function (p) { return { kind: 'place', place: p }; }));
+  return FamilyFuzzy.rank(q, items, {
+    key: function (it) {
+      return it.kind === 'person' ? FamilyFuzzy.personNames(it.p) : placeSearchText(it.place);
+    },
+    // Ties go to people, and among places to the one the family actually lives
+    // in. The offset is larger than any settlement's count can be.
+    weight: function (it) { return it.kind === 'person' ? 1e6 : it.place.count; },
+    limit: 24,
+  });
+}
+
+function openList(q) {
+  matches = searchItems(q);
+  cursor = matches.length ? 0 : -1;
+  drawList();
+  listEl.hidden = false;
+  qEl.setAttribute('aria-expanded', 'true');
+}
+function closeList() {
+  listEl.hidden = true;
+  qEl.setAttribute('aria-expanded', 'false');
+  cursor = -1;
+}
+function drawList() {
+  listEl.textContent = '';
+  if (!matches.length) {
+    var empty = document.createElement('div');
+    empty.className = 'search-empty';
+    empty.textContent = T.noMatch;
+    listEl.appendChild(empty);
+    return;
+  }
+  matches.forEach(function (it, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'search-opt';
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', i === cursor ? 'true' : 'false');
+    if (it.kind === 'person') {
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = sh(it.p).line;
+      var pn = document.createElement('span');
+      pn.className = 'nm';
+      pn.textContent = personName(it.p);
+      // Two people called מיכאל are told apart by where they live and when they
+      // were born, which is exactly what the row has room for.
+      var sub = document.createElement('span');
+      sub.className = 'sub';
+      sub.textContent = [addressLine(it.p) || T.noAddress, lifeLine(it.p)].filter(Boolean).join(' · ');
+      var no = document.createElement('span');
+      no.className = 'n';
+      no.textContent = it.p.no;
+      b.appendChild(dot); b.appendChild(pn); b.appendChild(sub); b.appendChild(no);
+    } else {
+      var nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = placeLabel(it.place);
+      var tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = T.placeTag;
+      var n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = it.place.count;
+      b.appendChild(nm); b.appendChild(tag); b.appendChild(n);
+    }
+    // mousedown, not click: blur fires first on click and would close the list
+    // out from under the pointer.
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); choose(it); });
+    listEl.appendChild(b);
+  });
+}
+function choose(it) {
+  if (it.kind === 'person') choosePerson(it.p); else choosePlace(it.place);
+}
+function choosePlace(place) {
+  if (typeof place === 'string') place = PLACE[place];
+  if (!place) return;
+  qEl.value = placeLabel(place);
+  closeList();
+  qEl.blur();
+  state.city = place.key || place.name;
+  state.person = '';
+  state.group = [];
+  syncUrl(true);
+  focusCity(state.city, { animate: true });
+}
+/* Centre on them and open their card — the same state a click on their pin
+   produces, so Back, the copied link and the panel all behave identically
+   whichever way the person was reached. Somebody with no address on file still
+   gets their card; there is just nowhere for the map to go, and saying so is
+   better than a search that looks like it did nothing.
+ *
+ * Shared by the search box and the "centre on me" button, which are two ways of
+ * asking for the same thing. */
+function goToPerson(p, viaTrail) {
+  if (!viaTrail) noteVisit(p.no);
+  state.person = String(p.no);
+  state.city = '';
+  state.group = [];
+  syncUrl(true);
+  if (focusPerson(state.person, { animate: true })) return true;
+  render();
+  paintSheet();
+  toast(T.cannotPlace(personName(p)));
+  return false;
+}
+function choosePerson(p) {
+  qEl.value = personName(p);
+  closeList();
+  qEl.blur();
+  goToPerson(p);
+}
+
+qEl.addEventListener('focus', function () { openList(qEl.value); });
+qEl.addEventListener('input', function () { openList(qEl.value); });
+qEl.addEventListener('blur', function () { setTimeout(closeList, 120); });
+qEl.addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (listEl.hidden) return openList(qEl.value);
+    cursor = Math.max(0, Math.min(matches.length - 1, cursor + (e.key === 'ArrowDown' ? 1 : -1)));
+    drawList();
+    var opt = listEl.children[cursor];
+    if (opt && opt.scrollIntoView) opt.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    if (!listEl.hidden && matches[cursor]) { e.preventDefault(); choose(matches[cursor]); }
+  } else if (e.key === 'Escape') {
+    closeList();
+    qEl.blur();
+  }
+});
+
+/* ───────── chrome ───────── */
+function toast(text) {
+  var el = document.getElementById('toast');
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function () { el.hidden = true; }, 2600);
+}
+
+function paintChrome() {
+  document.documentElement.setAttribute('lang', lang);
+  document.documentElement.setAttribute('dir', T.dir);
+  document.title = T.title;
+  document.getElementById('title').textContent = T.title;
+  document.getElementById('toTree').querySelector('span').textContent = T.toTree;
+  document.getElementById('tabMap').textContent = T.tabMap;
+  // Three rows of controls on a phone leaves no map; the long label is the one
+  // thing here that can be shorter without losing meaning.
+  /* The label lives in its own span now — writing textContent on the button
+     would delete the icon beside it. Below 760px the CSS hides the span and the
+     icon carries the meaning, so the accessible name has to come from the
+     attribute rather than from the text. */
+  var fitBtn = document.getElementById('fit');
+  fitBtn.querySelector('.fit-label').textContent = window.innerWidth < 620 ? T.fitShort : T.fit;
+  fitBtn.setAttribute('aria-label', T.fit);
+  fitBtn.title = T.fit;
+  document.getElementById('lang').textContent = T.other;
+  document.getElementById('copy').title = T.copy;
+  document.getElementById('copy').setAttribute('aria-label', T.copy);
+  qEl.placeholder = T.searchPh;
+  qEl.setAttribute('aria-label', T.searchPh);
+  var meBtn = document.getElementById('centerMe');
+  meBtn.hidden = !ME;
+  meBtn.querySelector('span').textContent = T.centerMe;
+  document.getElementById('count').textContent = T.counted(located.length, PEOPLE.length);
+  renderLegend();
+}
+
+document.getElementById('legendToggle').addEventListener('click', function () {
+  legendOpen = !legendOpen;
+  renderLegend();
+});
+
+document.getElementById('legendInfo').addEventListener('click', function (e) {
+  e.stopPropagation();
+  legendInfoOpen = !legendInfoOpen;
+  renderLegend();
+});
+
+/* "Where am I on this?" — the question every relative asks first, and until now
+   the map had no answer to it that did not involve reading 300 pins. `me` is the
+   person row the sign-in resolved to, so it needs no picking. */
+var ME = (window.FAMILY_ME && window.FAMILY_ME.no && byNo[String(window.FAMILY_ME.no)]) || null;
+document.getElementById('centerMe').addEventListener('click', function () {
+  if (ME) goToPerson(ME);
+});
+document.getElementById('fit').addEventListener('click', function () {
+  clearSelection(false);
+  fit();
+  render();
+});
+
+/* The panel's own two buttons: the chevron keeps the selection and folds the
+   list away, the × lets go of the selection altogether. */
+document.getElementById('sheetToggle').addEventListener('click', function () {
+  sheetOpen = !sheetOpen;
+  paintSheet();
+});
+document.getElementById('sheetClose').addEventListener('click', function () { clearSelection(true); });
+document.getElementById('sheetPrev').addEventListener('click', function () { histGo(-1); });
+document.getElementById('sheetNext').addEventListener('click', function () { histGo(1); });
+/* The sheet's body is written as innerHTML and rewritten on every selection, so
+   a relative chip cannot carry its own handler. It carries the person's number
+   instead and the listener sits on the container, which outlives the chips. */
+sheetBody.addEventListener('click', function (e) {
+  var btn = e.target.closest && e.target.closest('.rel-chip');
+  if (!btn) return;
+  var p = byNo[btn.getAttribute('data-no')];
+  if (p) goToPerson(p);
+});
+/* Clicking the map itself means "never mind" — Leaflet only fires this for the
+   background, a click on a pin belongs to the pin. Escape does the same for a
+   keyboard, except while the settlement box has it (there it closes the list). */
+map.on('click', function () { clearSelection(false); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && e.target !== qEl) clearSelection(false);
+});
+window.addEventListener('resize', placeSheet);
+document.getElementById('copy').addEventListener('click', function () {
+  FamilyUrl.copy().then(function (ok) { toast(ok ? T.copied : T.copyFailed); });
+});
+document.getElementById('lang').addEventListener('click', function () {
+  lang = T.otherCode;
+  T = L10N[lang];
+  try { localStorage.setItem('familyLang', lang); } catch (e) {}
+  fetch('/api/lang', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lang: lang }) }).catch(function () {});
+  paintChrome();
+  placeZoom();
+  render();
+  paintSheet();
+});
+
+/* The tree link keeps the family filter, so "the Levi family" survives moving
+   between the two pages. */
+function paintTreeLink() {
+  var qs = state.only.length ? '?family=' + encodeURIComponent(FamilyUrl.join(state.only)) : '';
+  document.getElementById('toTree').setAttribute('href', '/tree' + qs);
+}
+
+/* ───────── viewport in the address bar ───────── */
+var viewTimer = null;
+map.on('zoomend moveend', function () {
+  render();
+  paintTreeLink();
+  clearTimeout(viewTimer);
+  viewTimer = setTimeout(function () {
+    var c = map.getCenter();
+    pushUrl({ z: map.getZoom(), at: c.lat.toFixed(4) + ',' + c.lng.toFixed(4) });
+  }, 400);
+});
+
+/* ───────── one place out of one life ─────────
+ *
+ * `?at=lat,lng&label=…&kind=birth|death|burial` — what the tree's person card
+ * links to when a reader asks to see a birthplace or a grave on the map.
+ *
+ * It is a MARK, not a selection: nothing about the family filter, the legend or
+ * the pin sizes changes, because this map answers "where does the family live"
+ * and a town somebody was born in in 1912 is not an answer to that. Putting a
+ * birthplace into `places` as a resident pin would have added a settlement with
+ * a headcount of zero and quietly changed what every count on the page means.
+ *
+ * `at` was already the viewport in the address bar, so this rides on it rather
+ * than inventing a second coordinate parameter — a link to a mark IS a link to
+ * a view of that spot, and pasting it in a chat gets both.
+ */
+var spotLayer = L.layerGroup().addTo(map);
+
+function clearSpot() {
+  spotLayer.clearLayers();
+  pushUrl({ label: '', kind: '' });
+}
+
+function paintSpot(params) {
+  // Reads the params it is given, not the ones the page loaded with: Back out
+  // of a marked view has to take the mark away with it.
+  var q = params || U;
+  spotLayer.clearLayers();
+  var at = String(q.at || '').split(',');
+  var label = String(q.label || '').trim();
+  if (!label || at.length !== 2 || !isFinite(+at[0]) || !isFinite(+at[1])) return null;
+  var ll = [+at[0], +at[1]];
+  var kind = ['birth', 'death', 'burial'].indexOf(String(q.kind || '')) >= 0 ? q.kind : 'place';
+  /* One glyph per kind, and none of them a house: a cradle would be twee and a
+     headstone reads as a death notice on a page a child might open. A star for
+     a birth, a leaf for a death, a stone for a grave. */
+  var ICON = {
+    birth: '<path d="M12 3.6 13.9 9h5.6l-4.5 3.4 1.7 5.4L12 14.6 7.3 17.8 9 12.4 4.5 9h5.6Z"/>',
+    death: '<path d="M12 20c0-5 2-9 7-11 .6 5.4-2 10-7 11Zm0 0c0-4-1.6-7.2-5.6-8.8C5.9 15.6 8 19.2 12 20Z"/>',
+    burial: '<path d="M7.5 20V10a4.5 4.5 0 0 1 9 0v10Z"/><path d="M6 20h12"/>',
+    place: '<circle cx="12" cy="12" r="4"/>',
+  };
+  var m = L.marker(ll, {
+    icon: L.divIcon({
+      className: '', iconSize: [34, 58], iconAnchor: [17, 34],
+      html: '<div class="spot"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--color-bg)" '
+            + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICON[kind] + '</svg></div>'
+            + '<div class="spot-label">' + esc(label) + '</div>',
+    }),
+    // Above the family's own pins: it is what the reader followed a link to see.
+    zIndexOffset: 1000,
+  });
+  // A tap clears it, which is also the only way back to an ordinary map without
+  // editing the address bar. Said out loud in the tooltip rather than left to
+  // be discovered.
+  m.bindTooltip((T.spotKinds[kind] || T.spotKinds.place) + ' — ' + T.spotClear, { direction: 'top' });
+  m.on('click', clearSpot);
+  m.addTo(spotLayer);
+  return ll;
+}
+
+/* ───────── boot ───────── */
+paintChrome();
+
+(function start() {
+  var at = String(U.at || '').split(',');
+  var z = +U.z;
+  var spot = paintSpot();
+  if (spot) {
+    /* A link to a mark is a link to a spot, not to a viewport somebody happened
+       to be looking at: it opens close enough to see the town it is in, unless
+       the link carried a zoom of its own. */
+    map.setView(spot, (z >= 6 && z <= 17) ? z : 13, { animate: false });
+  } else if (at.length === 2 && isFinite(+at[0]) && isFinite(+at[1]) && z >= 6 && z <= 17) {
+    map.setView([+at[0], +at[1]], z, { animate: false });
+  } else {
+    fit();
+  }
+  render();
+  paintTreeLink();
+  // A shared link is the first stop on the walk, so the first Back from one is
+  // correctly nothing rather than a step into somebody else's browsing.
+  if (state.person) { noteVisit(state.person); if (!focusPerson(state.person)) { state.person = ''; syncUrl(false); } }
+  else if (state.group.length) { if (!focusGroup(state.group)) { state.group = []; syncUrl(false); } }
+  else if (state.city) { if (!focusCity(state.city)) { state.city = ''; syncUrl(false); } }
+}());
+
+/* Back and Forward move between views rather than off the page. */
+FamilyUrl.onPop(function (params) {
+  paintSpot(params);
+  state.only = FamilyUrl.list(params.family).filter(function (k) { return FAM[k]; });
+  state.origins = FamilyUrl.list(params.origin).filter(function (c) { return ORIGIN_COUNT[c]; });
+  state.city = params.city && PLACE[params.city] ? params.city : '';
+  state.person = params.p && byNo[params.p] ? params.p : '';
+  histSyncTo(state.person);
+  state.group = readGroup(params.g);
+  render();
+  renderLegend();
+  paintTreeLink();
+  if (state.person) focusPerson(state.person, { animate: true });
+  else if (state.group.length) focusGroup(state.group, { animate: true });
+  else if (state.city) focusCity(state.city, { animate: true });
+  else paintSheet();   // Back onto a view with nobody in it closes the panel.
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v2 — offline, and the palette at sunset
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Root scope now that these are the live pages, and the old /v2/-scoped worker
+   is retired on sight — see the same block in tree-v2.html. */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+  if (navigator.serviceWorker.getRegistrations) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) {
+      rs.forEach(function (r) { if (/\/v2\/$/.test(r.scope)) r.unregister(); });
+    }).catch(function () {});
+  }
+}
+
+/* The map goes on looking live with cached tiles, so being offline has to be
+   said. Nothing here is editable except a family's colour, and that is exactly
+   the thing that would silently fail. */
+(function offlineNote() {
+  var el = document.createElement('div');
+  el.id = 'offlineBar';
+  el.style.cssText = 'position:fixed;z-index:900;inset-inline:0;bottom:0;padding:calc(8px + var(--safe-b)) 14px 8px;'
+    + 'background:var(--color-neutral-900);color:var(--color-neutral-100);font-size:13px;text-align:center';
+  el.hidden = true;
+  document.body.appendChild(el);
+  var paint = function () {
+    el.textContent = T.offline;
+    el.hidden = navigator.onLine !== false;
+  };
+  window.addEventListener('online', paint);
+  window.addEventListener('offline', paint);
+  paint();
+}());
+
+/* A family's colour is derived in OKLCH against the page it sits on, so the
+   theme flipping means re-deriving all fourteen and redrawing. */
+if (globalThis.V2Theme) {
+  globalThis.V2Theme.onChange(function () {
+    FAM_ORDER.forEach(function (k) { FAM[k].sh = FamilyColors.shades(FAM[k].color); });
+    render();
+    renderLegend();
+    paintSheet();
+  });
+}
+
+/* "Tell us about yourself", on the map.
+ *
+ * Same question, same month-long silence after a dismissal, same wording — all
+ * three come from /app/profile.js and the T table, so a relative who lands here
+ * rather than on the tree does not meet a different app.
+ *
+ * The one difference is the button: the form lives on the tree, so "fill in my
+ * details" is a link to `/tree?p=<no>&edit=1` rather than something this page
+ * can do. It dismisses on the way out, so leaving the form without saving does
+ * not bring the dialog straight back on the next visit.
+ *
+ * Raised after a delay, for the reason the tree's is: a modal over a map that
+ * has not drawn yet reads as a login wall.
+ */
+(function profilePrompt() {
+  var PR = globalThis.FamilyProfile;
+  if (!PR || typeof PR.shouldPrompt !== 'function' || !ME) return;
+  if (!PR.shouldPrompt(ME)) return;
+
+  setTimeout(function () {
+    // Somebody who has already gone somewhere specific — a person, a settlement
+    // — came here to look at that. Ask them next time.
+    if (state.person || state.group.length) return;
+
+    var back = document.createElement('div');
+    back.className = 'dialog-backdrop';
+    back.style.cssText = 'position:fixed;inset:0;z-index:1000;background:color-mix(in srgb, #17150f 55%, transparent);'
+      + 'display:grid;place-items:end center;padding:14px 14px calc(14px + var(--safe-b))';
+    var chips = PR.missingLabelled(ME, T.profileItems).map(function (m) {
+      return '<span class="tag">' + esc(m.label) + '</span>';
+    }).join('');
+    back.innerHTML = '<div style="background:var(--color-neutral-100);border-radius:var(--radius-lg);'
+      + 'box-shadow:var(--shadow-lg);padding:20px;max-width:460px;width:100%;max-height:80dvh;overflow:auto">'
+      + '<h3 style="margin:0 0 8px;font-family:var(--font-heading);font-size:22px">' + esc(T.profileTitle) + '</h3>'
+      + '<p style="margin:0 0 12px;font-size:15px;line-height:1.55">' + esc(T.profileBody) + '</p>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:8px">' + chips + '</div>'
+      + '<p style="margin:12px 0 0;font-size:13px;line-height:1.55;color:color-mix(in srgb, var(--color-text) 60%, transparent)">'
+      + esc(T.profileWhy) + '</p>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px">'
+      + '<a class="btn btn-primary" id="profileFill" href="/tree?p=' + esc(ME.no) + '&edit=1"'
+      + ' style="border-radius:999px;flex:1 1 180px;justify-content:center;text-decoration:none">' + esc(T.profileFill) + '</a>'
+      + '<button class="btn btn-ghost" id="profileLater" type="button" style="border-radius:999px">' + esc(T.profileLater) + '</button>'
+      + '</div></div>';
+
+    var close = function () { PR.dismiss(ME); back.remove(); };
+    back.addEventListener('click', function (e) { if (e.target === back) close(); });
+    back.querySelector('#profileLater').addEventListener('click', close);
+    // Remember before navigating: the tree is a fresh document and cannot know
+    // this happened, and coming back to a map that asks again would be a nag.
+    back.querySelector('#profileFill').addEventListener('click', function () { PR.dismiss(ME); });
+    document.body.appendChild(back);
+  }, 1400);
+}());
+
+/* The stops are a proportion of the window, so a rotation moves them. */
+window.addEventListener('resize', function () { placeSheet(); });
+
+/* A handle on the page's own working state, for scripts/map-household-selftest.mjs.
+ *
+ * Deliberately a real line of code rather than something a test injects: the
+ * grouping this page does — which people share a door, and where each door was
+ * drawn — is settled before a single marker exists, so there is nothing in the
+ * DOM to assert it against. Nothing secret leaves through here; every one of
+ * these is derived from window.FAMILY, which the browser already has. */
+window.__MAP = { HH: HH, hhOf: hhOf, jitter: jitter, exact: exact, PLACE: PLACE, map: map, render: render };
+</script>
+</body></html>

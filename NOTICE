@@ -1,0 +1,16 @@
+Third-party assets bundled in web/public/app/
+============================================
+
+Fonts
+-----
+Figtree and Caprasimo are used under the SIL Open Font License 1.1 and are
+included here. The stylesheets ALSO reference "Roobert Hebrew", which is a
+commercially licensed typeface and is therefore NOT included in this
+repository. The font stacks name it first and fall through to Figtree and then
+to the platform UI font, so the pages render correctly without it. If you have
+a licence for it, drop the woff2 at web/public/app/roobert-hebrew.woff2.
+
+Leaflet
+-------
+leaflet-1.9.4.js and its marker/layer images are Leaflet, © Volodymyr Agafonkin
+and contributors, BSD-2-Clause.

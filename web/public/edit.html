@@ -1,0 +1,1119 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Stamped by sendDoc(). Left empty on disk so a copy served by anything that
+     does not know about the stamp still parses and still runs. -->
+<meta name="x-build" content="">
+<meta name="referrer" content="no-referrer">
+<title>עריכה מתקדמת · Advanced edit</title>
+<link rel="icon" href="/icons/favicon.ico">
+
+<!--
+  The advanced person editor.
+
+  Every other surface in this app decides what a person's form looks like. This
+  one asks: `GET /api/people/:ref/raw` hands over the columns, their labels in
+  both languages, how to draw each one, and — for the ones it will not write —
+  the reason. Adding a column to ADVANCED_EDITABLE and to ADVANCED_GROUPS in
+  web/server.mjs is the whole change; nothing here names a column.
+
+  That is not tidiness. The bug this page is built to avoid is a field that
+  looks editable, accepts what you type, and is then overwritten by the next
+  `family sync` or `syncPlaceIds` sweep — a derived column offered as if it
+  were a fact. The server knows which those are; the page refuses to guess.
+
+  No framework and no build step, unlike tree-v2.html: this is a form, it is
+  read by a handful of people, and a second copy of a template engine is a
+  second thing to keep working.
+
+  Every write goes through the same routes the tree uses, so every write lands
+  in `changes` and in changes.log. There is no path from this page to the DB
+  that skips recordChange().
+-->
+
+<link rel="stylesheet" href="/app/v2-base.css">
+<style>
+:root {
+  --color-bg: #f5ead8;
+  --color-surface: #ebddc5;
+  --color-text: #201e1d;
+  --color-accent: #c67139;
+  --color-accent-2: #7a8a5e;
+  --color-divider: color-mix(in srgb, #201e1d 16%, transparent);
+  --color-neutral-100: #f9f4ed;
+  --color-neutral-200: #eee7db;
+  --color-neutral-300: #dcd3c4;
+  --color-neutral-500: #a19786;
+  --color-neutral-700: #645c50;
+  --color-accent-100: #fff2eb;
+  --color-accent-200: #ffe1d0;
+  --color-accent-600: #b2622d;
+  --color-accent-700: #8c491a;
+  --color-accent-800: #643312;
+  --color-danger: #a3311f;
+  --font-body: "Roobert Hebrew", "Figtree", system-ui, sans-serif;
+  --space-1: 4.4px; --space-2: 8.8px; --space-3: 13.2px; --space-4: 17.6px;
+  --radius-sm: 8px; --radius-md: 16px;
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2e2b25 16%, transparent);
+  --tap: 44px;
+}
+@media (prefers-color-scheme: dark) { :root { --color-danger: #e8836f; } }
+
+@font-face {
+  font-family: "Roobert Hebrew"; font-display: swap;
+  src: url("/app/roobert-hebrew.woff2") format("woff2");
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--color-bg); color: var(--color-text);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  padding-bottom: calc(96px + var(--safe-b));
+}
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.01em; }
+a { color: var(--color-accent-700); }
+
+/* ── the bar ─────────────────────────────────────────────────────────────── */
+.top {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-divider);
+  padding: var(--space-2) var(--space-3);
+  padding-top: calc(var(--space-2) + var(--safe-t));
+  display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap;
+}
+.top .grow { flex: 1 1 220px; min-width: 0; position: relative; }
+
+.input, select, textarea {
+  width: 100%; font: inherit; color: inherit;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider); border-radius: var(--radius-sm);
+  padding: 10px var(--space-3); min-height: var(--tap);
+}
+textarea { min-height: 80px; resize: vertical; line-height: 1.45; }
+.input:disabled, textarea:disabled {
+  background: color-mix(in srgb, var(--color-neutral-300) 40%, transparent);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  cursor: not-allowed;
+}
+.btn {
+  font: inherit; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+  background: var(--color-neutral-100); color: inherit;
+  padding: 8px var(--space-3); min-height: var(--tap);
+}
+.btn:hover { background: var(--color-neutral-200); }
+.btn-primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+.btn-primary:hover { background: var(--color-accent-600); }
+.btn-primary:disabled { opacity: .45; cursor: default; }
+.btn-danger { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 40%, transparent); }
+.btn-sm { min-height: 34px; padding: 4px 10px; font-size: 14px; border-radius: 999px; }
+
+/* ── the person picker ───────────────────────────────────────────────────── */
+.picks {
+  position: absolute; inset-inline: 0; top: calc(100% + 4px); z-index: 30;
+  background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+  max-height: 60vh; overflow: auto;
+}
+.picks button {
+  display: flex; gap: var(--space-2); align-items: baseline; width: 100%;
+  text-align: start; font: inherit; color: inherit; cursor: pointer;
+  background: none; border: 0; border-bottom: 1px solid var(--color-divider);
+  padding: 10px var(--space-3); min-height: var(--tap);
+}
+.picks button:hover, .picks button[aria-selected="true"] { background: var(--color-accent-100); }
+.picks .no { margin-inline-start: auto; font-size: 13px; color: var(--color-neutral-500); }
+.picks .sub { font-size: 13px; color: var(--color-neutral-500); }
+
+/* ── the sheet ───────────────────────────────────────────────────────────── */
+main { max-width: 1080px; margin: 0 auto; padding: var(--space-4) var(--space-3); }
+.card {
+  background: var(--color-surface); border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md); padding: var(--space-3);
+  margin-bottom: var(--space-3); box-shadow: var(--shadow-sm);
+}
+.card > h2 { font-size: 17px; margin-bottom: var(--space-1); }
+.note { font-size: 13px; color: color-mix(in srgb, var(--color-text) 62%, transparent); margin-bottom: var(--space-3); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-3); }
+.field.wide { grid-column: 1 / -1; }
+.field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.field .col { font-weight: 400; color: var(--color-neutral-500); font-family: ui-monospace, monospace; font-size: 12px; }
+.field .why { font-size: 12px; color: color-mix(in srgb, var(--color-text) 58%, transparent); margin-top: 4px; }
+.field.dirty > label { color: var(--color-accent-700); }
+.field.dirty .input, .field.dirty textarea, .field.dirty select {
+  border-color: var(--color-accent); background: var(--color-accent-100);
+}
+.check { display: flex; gap: var(--space-2); align-items: center; min-height: var(--tap); }
+.check input { width: 20px; height: 20px; accent-color: var(--color-accent); }
+.pill {
+  display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px;
+  padding: 2px 9px; background: var(--color-accent-200); color: var(--color-accent-800);
+}
+.pill.warn { background: color-mix(in srgb, var(--color-danger) 16%, transparent); color: var(--color-danger); }
+
+/* ── rows (unions, facts, questions, …) ──────────────────────────────────── */
+.row {
+  border: 1px solid var(--color-divider); border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2);
+  background: var(--color-neutral-100);
+}
+.row .head { display: flex; gap: var(--space-2); align-items: center; flex-wrap: nowrap; }
+.row .head .grow { flex: 1 1 auto; min-width: 0; }
+.row .body { margin-top: var(--space-2); }
+/* A row is DATA — one person's CV section, one marriage — and the schema fields
+   above are the page's subject. Without a mark of its own a fact labelled
+   "Before software" reads as a column of `people` that somebody invented, which
+   is exactly how this page first landed. The id chip is that mark. */
+.row .rid {
+  flex: none; font-family: ui-monospace, monospace; font-size: 12px;
+  color: var(--color-neutral-500); background: var(--color-neutral-200);
+  border-radius: 999px; padding: 1px 8px;
+}
+.row .rtitle { font-weight: 600; display: block; }
+/* One line, clipped. The value behind it can be four thousand characters of
+   wiki markup; the header's job is to let you find the row, and the editor
+   behind the pencil is where you read it. */
+.row .rsub {
+  display: block; font-size: 13px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; color: color-mix(in srgb, var(--color-text) 58%, transparent);
+}
+
+/* ── a collapsible card ───────────────────────────────────────────────────── */
+.cardhead {
+  display: flex; gap: var(--space-2); align-items: center; width: 100%;
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+  padding: 0; text-align: start; min-height: var(--tap);
+}
+.cardhead .chev { flex: none; transition: transform .15s; color: var(--color-neutral-500); }
+.cardhead[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.cardhead h2 { flex: 1 1 auto; }
+.count {
+  flex: none; font-size: 13px; font-weight: 600; border-radius: 999px;
+  padding: 1px 9px; background: var(--color-neutral-200); color: var(--color-neutral-700);
+}
+.sublist { margin-bottom: var(--space-2); }
+.sublist h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--color-neutral-700); }
+.subrow { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; flex-wrap: wrap; }
+.subrow .grow { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The kind, the dates, the cast — read at a glance on a closed row. */
+.tag {
+  display: inline-block; font-size: 12px; border-radius: 999px; padding: 0 7px;
+  margin-inline-start: 6px; background: var(--color-accent-200); color: var(--color-accent-800);
+  vertical-align: middle;
+}
+a.tag.place {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--color-accent-2) 22%, transparent);
+  color: var(--color-accent-2-800);
+}
+a.tag.place:hover { background: color-mix(in srgb, var(--color-accent-2) 38%, transparent); }
+/* A town we could not geocode: the link still works, as a search. */
+a.tag.place.fuzzy { border: 1px dashed color-mix(in srgb, var(--color-accent-2) 55%, transparent); }
+.hist { font-size: 14px; }
+.hist li { padding: 6px 0; border-bottom: 1px solid var(--color-divider); display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; }
+.hist .when { color: var(--color-neutral-500); font-size: 12px; white-space: nowrap; }
+.hist .gone { text-decoration: line-through; opacity: .55; }
+
+/* ── the save bar ────────────────────────────────────────────────────────── */
+.savebar {
+  position: fixed; inset-inline: 0; bottom: 0; z-index: 40;
+  padding: var(--space-2) var(--space-3);
+  padding-bottom: calc(var(--space-2) + var(--safe-b));
+  background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--color-divider);
+  display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap;
+}
+.savebar .grow { flex: 1 1 auto; min-width: 0; font-size: 14px; }
+.msg-err { color: var(--color-danger); font-weight: 600; }
+.msg-ok { color: var(--color-accent-2); font-weight: 600; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <strong style="font-size: 15px">עריכה מתקדמת</strong>
+  <div class="grow">
+    <input id="find" class="input" autocomplete="off" spellcheck="false"
+           placeholder="חיפוש לפי שם או מספר" aria-label="חיפוש אדם">
+    <div id="picks" class="picks hidden" role="listbox"></div>
+  </div>
+  <button id="lang" class="btn btn-sm" type="button">EN</button>
+  <a class="btn btn-sm" href="/tree">העץ</a>
+  <a class="btn btn-sm" href="/map">המפה</a>
+</header>
+
+<main>
+  <div id="intro" class="card">
+    <h2>עריכה מתקדמת</h2>
+    <p class="note" id="introNote"></p>
+  </div>
+  <div id="sheet"></div>
+</main>
+
+<div class="savebar hidden" id="savebar">
+  <span class="grow" id="status"></span>
+  <button class="btn" id="revert" type="button">ביטול השינויים</button>
+  <button class="btn btn-primary" id="save" type="button">שמירה</button>
+</div>
+
+<script type="module">
+/* ── plumbing ─────────────────────────────────────────────────────────────── */
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, kids = []) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'text') n.textContent = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v === true ? '' : String(v));
+  }
+  for (const kid of [].concat(kids)) if (kid) n.append(kid);
+  return n;
+};
+
+/**
+ * Where to open a place on a map.
+ *
+ * Coordinates when the town has been geocoded, which is exact; otherwise the
+ * name and its country as a search, which is the honest fallback for a town
+ * nobody has managed to place. Google rather than the app's own Leaflet map on
+ * purpose — this is the link you follow to get DIRECTIONS to a cemetery or to
+ * see what a street in Iaşi looks like, which is not what the family map is for.
+ */
+function mapsUrl(r) {
+  const q = (r.place_lat != null && r.place_lng != null)
+    ? `${r.place_lat},${r.place_lng}`
+    : [r.place_name || r.place_text, r.place_country].filter(Boolean).join(', ');
+  if (!q) return '';
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+/* One line of whatever this is. Wiki tables, bullet lists and four-thousand
+   character CV sections all arrive here; what comes out is short enough to sit
+   in a row header without becoming the page. */
+const clip = (v, n = 90) => {
+  const s = String(v ?? '').replace(/\s+/g, ' ').trim();
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+};
+
+async function api(method, path, body) {
+  const r = await fetch(path, {
+    method,
+    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = {};
+  try { data = await r.json(); } catch { /* an empty or non-JSON body */ }
+  if (!r.ok) {
+    // The API answers in Hebrew and, where it has one, in English too. Which
+    // one is shown follows the page's language rather than the server's default.
+    const err = new Error((L === 'en' && data.error_en) || data.error || `HTTP ${r.status}`);
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+/* ── language ─────────────────────────────────────────────────────────────── */
+/* Held in localStorage rather than on the person's row: `people.lang` is the
+   preference the tree and the map read, and flipping it from here would be a
+   change to the DB — logged, attributed and undoable — every time somebody
+   glanced at this page in the other language. */
+
+const T = {
+  he: {
+    title: 'עריכה מתקדמת', pick: 'בחרו אדם כדי להתחיל.',
+    intro: 'כל עמודה בשורה של האדם, כולל השדות המבניים שהטופס הרגיל לא נוגע בהם. כל שינוי נרשם ביומן על שמכם, וניתן לביטול.',
+    search: 'חיפוש לפי שם או מספר', none: 'לא נמצא אף אחד',
+    save: 'שמירה', revert: 'ביטול השינויים', saved: 'נשמר', nothing: 'אין שינויים',
+    dirty: (n) => `${n} שדות שונו`, saving: 'שומר…',
+    readonly: 'לקריאה בלבד', removed: 'הוסר מהעץ',
+    history: 'יומן השינויים', undo: 'ביטול', undone: 'בוטל',
+    unions: 'זוגיות', facts: 'פרטים', questions: 'שאלות מחקר',
+    factKind: 'סוג', precision: 'דיוק', people: 'משתתפים', links: 'קישורים',
+    noPin: 'אין עדיין נקודה על המפה — חיפוש לפי שם',
+    addPerson: 'הוספת משתתף', role: 'תפקיד', linkTo: 'קישור לפרט מספר',
+    relation: 'יחס', subject: 'הנושא',
+    names: 'גרסאות שם', documents: 'מסמכים', photos: 'תמונות',
+    add: 'הוספה', del: 'מחיקה', empty: 'אין רשומות',
+    remove: 'הסרה מהעץ', restore: 'החזרה לעץ',
+    confirmDel: 'למחוק את הרשומה הזאת? הפעולה נרשמת ביומן וניתנת לביטול.',
+    confirmPerson: 'להסיר את האדם הזה מהעץ?',
+    status: 'סטטוס', from: 'מ־', to: 'עד', notes: 'הערות', spouseOf: 'בן/בת הזוג',
+    label: 'כותרת', value: 'תוכן', asOf: 'נכון לתאריך', confidence: 'רמת ודאות',
+    kind: 'סוג', place: 'מקום', titleF: 'כותרת', note: 'הערה',
+    question: 'השאלה', candidate: 'תשובה אפשרית', nextStep: 'הצעד הבא',
+    nameVal: 'השם', script: 'כתב', recSys: 'מערכת הרישום',
+    source: 'מקור', caption: 'כיתוב', avatar: 'תמונת פרופיל',
+    open: 'פתיחה', he: 'עברית', en: 'אנגלית',
+  },
+  en: {
+    title: 'Advanced edit', pick: 'Pick a person to begin.',
+    intro: "Every column on a person's row, including the structural fields the ordinary form does not touch. Every change is logged under your name, and can be undone.",
+    search: 'Search by name or number', none: 'Nobody matched',
+    save: 'Save', revert: 'Discard changes', saved: 'Saved', nothing: 'No changes',
+    dirty: (n) => `${n} field${n === 1 ? '' : 's'} changed`, saving: 'Saving…',
+    readonly: 'read-only', removed: 'removed from the tree',
+    history: 'Change log', undo: 'Undo', undone: 'undone',
+    unions: 'Unions', facts: 'Facts', questions: 'Research questions',
+    factKind: 'Kind', precision: 'Precision', people: 'People', links: 'Links',
+    noPin: 'not geocoded yet — searches by name',
+    addPerson: 'Add a person', role: 'Role', linkTo: 'Link to fact #',
+    relation: 'Relation', subject: 'subject',
+    names: 'Name variants', documents: 'Documents', photos: 'Photos',
+    add: 'Add', del: 'Delete', empty: 'Nothing here yet',
+    remove: 'Remove from the tree', restore: 'Restore to the tree',
+    confirmDel: 'Delete this row? The removal is logged and can be undone.',
+    confirmPerson: 'Remove this person from the tree?',
+    status: 'Status', from: 'From', to: 'To', notes: 'Notes', spouseOf: 'Partner',
+    label: 'Label', value: 'Value', asOf: 'As of', confidence: 'Confidence',
+    kind: 'Kind', place: 'Place', titleF: 'Title', note: 'Note',
+    question: 'Question', candidate: 'Possible answer', nextStep: 'Next step',
+    nameVal: 'Name', script: 'Script', recSys: 'Record system',
+    source: 'Source', caption: 'Caption', avatar: 'profile photo',
+    open: 'Open', he: 'Hebrew', en: 'English',
+  },
+};
+
+let L = localStorage.getItem('familyEditLang') || (document.documentElement.lang === 'en' ? 'en' : 'he');
+const t = () => T[L];
+const lbl = (o) => (L === 'en' ? (o.en || o.he) : (o.he || o.en));
+
+function applyLang() {
+  document.documentElement.lang = L;
+  document.documentElement.dir = L === 'en' ? 'ltr' : 'rtl';
+  $('lang').textContent = L === 'en' ? 'עב' : 'EN';
+  $('find').placeholder = t().search;
+  $('find').setAttribute('aria-label', t().search);
+  $('save').textContent = t().save;
+  $('revert').textContent = t().revert;
+  $('introNote').textContent = t().intro;
+  document.querySelector('.top strong').textContent = t().title;
+  if (state.raw) render();
+}
+
+$('lang').addEventListener('click', () => {
+  L = L === 'he' ? 'en' : 'he';
+  localStorage.setItem('familyEditLang', L);
+  applyLang();
+});
+
+/* ── state ────────────────────────────────────────────────────────────────── */
+
+const state = {
+  me: null,
+  people: [],
+  raw: null,
+  /* Column → the value now in the box, for the boxes whose value differs from
+     what the server sent. This IS the pending patch: the save button posts it
+     verbatim, so a field that has been typed back to its original value is
+     removed from here rather than sent as a no-op. */
+  dirty: new Map(),
+};
+
+const HE_KIND = {
+  add: 'הוספה', edit: 'עריכה', delete: 'מחיקה', restore: 'שחזור', undo: 'ביטול',
+};
+
+/* ── the person picker ────────────────────────────────────────────────────── */
+
+const norm = (s) => String(s || '').toLowerCase().replace(/["'״׳]/g, '').trim();
+
+function matches(q) {
+  const n = norm(q);
+  if (!n) return [];
+  // A bare number is a person number, which is the identifier this page's users
+  // actually have to hand — they read it off the tree and off the change log.
+  if (/^\d+$/.test(n)) {
+    const exact = state.people.filter((p) => String(p.no) === n);
+    const near = state.people.filter((p) => String(p.no).startsWith(n) && String(p.no) !== n);
+    return [...exact, ...near].slice(0, 40);
+  }
+  const parts = n.split(/\s+/).filter(Boolean);
+  return state.people.filter((p) => {
+    const hay = norm(`${p.first} ${p.last} ${p.firstEn} ${p.lastEn} ${p.maiden} ${p.id}`);
+    return parts.every((w) => hay.includes(w));
+  }).slice(0, 40);
+}
+
+let pickIdx = -1;
+function closePicks() { $('picks').classList.add('hidden'); pickIdx = -1; }
+
+function openPicks() {
+  const rows = matches($('find').value);
+  const box = $('picks');
+  box.replaceChildren();
+  if (!$('find').value.trim()) return closePicks();
+  if (!rows.length) {
+    box.append(el('div', { class: 'no', text: t().none, style: 'padding: 10px 13px' }));
+  }
+  rows.forEach((p, i) => {
+    const name = L === 'en' ? (`${p.firstEn} ${p.lastEn}`.trim() || `${p.first} ${p.last}`.trim())
+                            : (`${p.first} ${p.last}`.trim() || `${p.firstEn} ${p.lastEn}`.trim());
+    box.append(el('button', { type: 'button', role: 'option', 'data-i': i, onclick: () => choose(p.no || p.id) }, [
+      el('span', { text: name || p.id }),
+      el('span', { class: 'sub', text: [p.born, p.branch].filter(Boolean).join(' · ') }),
+      el('span', { class: 'no', text: p.no ? `#${p.no}` : '' }),
+    ]));
+  });
+  box.classList.remove('hidden');
+  pickIdx = -1;
+}
+
+$('find').addEventListener('input', openPicks);
+$('find').addEventListener('focus', openPicks);
+$('find').addEventListener('blur', () => setTimeout(closePicks, 150));
+$('find').addEventListener('keydown', (e) => {
+  const opts = [...$('picks').querySelectorAll('button')];
+  if (e.key === 'Escape') return closePicks();
+  if (!opts.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    pickIdx = (pickIdx + (e.key === 'ArrowDown' ? 1 : opts.length - 1) + (pickIdx < 0 ? (e.key === 'ArrowDown' ? 0 : 1) : 0)) % opts.length;
+    opts.forEach((o, i) => o.setAttribute('aria-selected', String(i === pickIdx)));
+    opts[pickIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    (opts[pickIdx >= 0 ? pickIdx : 0]).click();
+  }
+});
+
+/* ── loading a person ─────────────────────────────────────────────────────── */
+
+async function choose(ref) {
+  closePicks();
+  $('find').blur();
+  // The person number goes in the URL, so a link to this page is a link to a
+  // person — the same promise ?p= makes on the tree and the map.
+  const url = new URL(location.href);
+  url.searchParams.set('p', String(ref));
+  history.replaceState(null, '', url);
+  await load(ref);
+}
+
+async function load(ref) {
+  state.dirty.clear();
+  try {
+    state.raw = await api('GET', `/api/people/${encodeURIComponent(ref)}/raw`);
+  } catch (err) {
+    state.raw = null;
+    $('sheet').replaceChildren(el('div', { class: 'card' }, el('p', { class: 'msg-err', text: err.message })));
+    return;
+  }
+  $('intro').classList.add('hidden');
+  render();
+}
+
+/* ── drawing a field ──────────────────────────────────────────────────────── */
+
+const personName = (id) => {
+  const p = state.people.find((x) => x.id === id);
+  if (!p) return id || '';
+  const name = L === 'en' ? (`${p.firstEn} ${p.lastEn}`.trim() || `${p.first} ${p.last}`.trim())
+                          : (`${p.first} ${p.last}`.trim() || `${p.firstEn} ${p.lastEn}`.trim());
+  return `${name || p.id}${p.no ? ` (#${p.no})` : ''}`;
+};
+
+function markDirty(f, node, value) {
+  // Compared as strings because a checkbox reports 1/0 against a stored '1'/'0'
+  // and a number box a string against a stored integer.
+  if (String(value) === String(f.value)) state.dirty.delete(f.key);
+  else state.dirty.set(f.key, value);
+  node.classList.toggle('dirty', state.dirty.has(f.key));
+  refreshSaveBar();
+}
+
+function drawField(f) {
+  const wide = ['textarea'].includes(f.type) || f.key === 'notes';
+  const wrap = el('div', { class: `field${wide ? ' wide' : ''}` });
+  const id = `f-${f.key}`;
+  wrap.append(el('label', { for: id }, [
+    document.createTextNode(lbl(f)),
+    el('span', { class: 'col', text: `  ${f.key}` }),
+    f.editable ? null : el('span', { class: 'pill', text: ` ${t().readonly}`, style: 'margin-inline-start: 6px' }),
+  ]));
+
+  let node;
+  if (f.type === 'bool') {
+    const box = el('input', { type: 'checkbox', id, disabled: !f.editable });
+    box.checked = String(f.value) === '1' || f.value === true;
+    box.addEventListener('change', () => markDirty(f, wrap, box.checked ? 1 : 0));
+    node = el('div', { class: 'check' }, [box, el('label', { for: id, text: lbl(f), style: 'margin: 0; font-weight: 400' })]);
+  } else if (f.type === 'select') {
+    node = el('select', { id, class: 'input', disabled: !f.editable });
+    for (const [v, text] of (f.opts || [])) {
+      const o = el('option', { value: v, text });
+      if (String(v) === String(f.value)) o.selected = true;
+      node.append(o);
+    }
+    node.addEventListener('change', () => markDirty(f, wrap, node.value));
+  } else if (f.type === 'textarea') {
+    node = el('textarea', { id, class: 'input', disabled: !f.editable });
+    node.value = f.value ?? '';
+    node.addEventListener('input', () => markDirty(f, wrap, node.value));
+  } else if (f.type === 'person') {
+    /* A datalist rather than the tree's combo box: the whole roster is already
+       in memory, the browser gives keyboard and screen-reader behaviour for
+       free, and what is stored is the id — so the visible text is the readable
+       name and the value that travels is `<name> (#no)`, parsed back below. */
+    node = el('input', { id, class: 'input', list: 'people-list', disabled: !f.editable,
+      autocomplete: 'off', spellcheck: 'false' });
+    node.value = f.value ? personName(f.value) : '';
+    const resolve = () => {
+      const raw = node.value.trim();
+      if (!raw) return '';
+      const m = raw.match(/#(\d+)\s*$/);
+      if (m) return state.people.find((p) => String(p.no) === m[1])?.id || raw;
+      const hit = state.people.find((p) => personName(p.id) === raw)
+        || state.people.find((p) => norm(`${p.first} ${p.last}`) === norm(raw))
+        || state.people.find((p) => p.id === raw);
+      return hit ? hit.id : raw;
+    };
+    node.addEventListener('change', () => markDirty(f, wrap, resolve()));
+    node.addEventListener('input', () => markDirty(f, wrap, resolve()));
+  } else if (f.type === 'time') {
+    node = el('input', { id, class: 'input', disabled: true });
+    node.value = +f.value ? new Date(+f.value * 1000).toLocaleString(L === 'en' ? 'en-GB' : 'he-IL') : '—';
+  } else {
+    node = el('input', { id, class: 'input', disabled: !f.editable,
+      inputmode: f.type === 'int' ? 'numeric' : null, autocomplete: 'off' });
+    node.value = f.value ?? '';
+    node.addEventListener('input', () => markDirty(f, wrap, node.value));
+  }
+  wrap.append(node);
+  // The reason a locked field is locked, and what to do instead. This is the
+  // whole point of the read-only rows: a derived column with no explanation
+  // reads as a bug in the form.
+  const why = L === 'en' ? f.lockEn : f.lockHe;
+  if (!f.editable && why) wrap.append(el('div', { class: 'why', text: why }));
+  return wrap;
+}
+
+/* ── the save bar ─────────────────────────────────────────────────────────── */
+
+function refreshSaveBar(msg = '', cls = '') {
+  const n = state.dirty.size;
+  $('savebar').classList.toggle('hidden', !state.raw);
+  $('save').disabled = !n;
+  $('revert').disabled = !n;
+  $('status').className = `grow ${cls}`;
+  $('status').textContent = msg || (n ? t().dirty(n) : t().nothing);
+}
+
+$('revert').addEventListener('click', () => { state.dirty.clear(); render(); });
+
+$('save').addEventListener('click', async () => {
+  if (!state.dirty.size) return;
+  $('save').disabled = true;
+  refreshSaveBar(t().saving);
+  try {
+    await api('PATCH', `/api/people/${encodeURIComponent(state.raw.id)}`,
+      Object.fromEntries(state.dirty));
+    state.dirty.clear();
+    // Reloaded rather than patched in place: an edit can move more than the
+    // fields that were sent — a re-parenting re-derives origins across the
+    // tree, a life place fills a place id — and the page must show what the DB
+    // now holds rather than what was typed at it.
+    await load(state.raw.id);
+    refreshSaveBar(t().saved, 'msg-ok');
+  } catch (err) {
+    refreshSaveBar(err.message, 'msg-err');
+  } finally {
+    $('save').disabled = !state.dirty.size;
+  }
+});
+
+/* ── child tables ─────────────────────────────────────────────────────────── */
+/* Each one is the same three things: a list of rows, an editor per row, and an
+   add form. They differ only in their columns and their endpoints, so they are
+   described rather than written out — one `section()` renderer, one spec each.
+   Every endpoint here already existed and already logs; this page adds no new
+   write path to the DB. */
+
+const SPECS = () => [
+  {
+    key: 'unions', title: t().unions, rows: () => state.raw.unions,
+    head: (r) => personName(r.a_id === state.raw.id ? r.b_id : r.a_id),
+    sub: (r) => [r.status, r.start_date, r.notes].filter(Boolean).join(' · '),
+    fields: [
+      { k: 'status', label: t().status, type: 'select', opts: () => state.raw.vocab.unionStatus.map((v) => [v, v]) },
+      { k: 'start_date', label: t().from }, { k: 'end_date', label: t().to },
+      { k: 'notes', label: t().notes, type: 'textarea' },
+    ],
+    save: (r, body) => api('PATCH', `/api/unions/${r.id}`, body),
+    del: (r) => api('DELETE', `/api/unions/${r.id}`),
+    addFields: [
+      { k: 'b', label: t().spouseOf, type: 'person' },
+      { k: 'status', label: t().status, type: 'select', opts: () => state.raw.vocab.unionStatus.map((v) => [v, v]) },
+      { k: 'start_date', label: t().from },
+    ],
+    add: (body) => api('POST', '/api/unions', { a: state.raw.id, ...body }),
+  },
+  {
+    key: 'facts', title: t().facts, rows: () => state.raw.facts,
+    head: (r) => (L === 'en' ? r.label_en || r.label_he : r.label_he || r.label_en),
+    sub: (r) => (L === 'en' ? r.value_en || r.value_he : r.value_he || r.value_en),
+    // The kind and the cast, shown on the closed row: they are what makes this
+    // a typed table rather than a bag of headings, and hiding them behind the
+    // pencil would leave the fold looking exactly like the version this
+    // replaced.
+    tags: (r) => [
+      r.kind,
+      [r.start_date, r.end_date].filter(Boolean).join('–'),
+      r.people?.length > 1 ? `${r.people.length} 👤` : '',
+      r.links?.length ? `${r.links.length} ⇄` : '',
+      r.confidence !== 'confirmed' ? r.confidence : '',
+      r.source || '',
+    ].filter(Boolean),
+    fields: [
+      { k: 'kind', label: t().factKind, type: 'select', opts: () => state.raw.vocab.factKinds.map((v) => [v, v]) },
+      { k: 'label_he', label: `${t().label} (${t().he})` }, { k: 'label_en', label: `${t().label} (${t().en})` },
+      { k: 'value_he', label: `${t().value} (${t().he})`, type: 'textarea' },
+      { k: 'value_en', label: `${t().value} (${t().en})`, type: 'textarea' },
+      { k: 'start_date', label: t().from },
+      { k: 'start_precision', label: t().precision, type: 'select', opts: () => state.raw.vocab.precision.map((v) => [v, v || '—']) },
+      { k: 'end_date', label: t().to },
+      { k: 'end_precision', label: t().precision, type: 'select', opts: () => state.raw.vocab.precision.map((v) => [v, v || '—']) },
+      { k: 'place_text', label: t().place },
+      { k: 'as_of', label: t().asOf },
+      { k: 'source', label: t().source },
+      { k: 'confidence', label: t().confidence, type: 'select', opts: () => state.raw.vocab.confidence.map((v) => [v, v]) },
+      { k: 'sort_order', label: '#' },
+    ],
+    // The town, as a link out to a map rather than as inert text — see mapsUrl().
+    place: (r) => (r.place_name || r.place_text
+      ? { label: r.place_name || r.place_text, url: mapsUrl(r), exact: r.place_lat != null }
+      : null),
+    // Who else is in it, and what this fact has to do with other facts. Drawn
+    // by the row renderer rather than as plain fields, because both are lists.
+    people: true, links: true,
+    save: (r, body) => api('PATCH', `/api/facts/${r.id}`, body),
+    del: (r) => api('DELETE', `/api/facts/${r.id}`),
+    addFields: [
+      { k: 'kind', label: t().factKind, type: 'select', opts: () => state.raw.vocab.factKinds.map((v) => [v, v]) },
+      { k: 'label_he', label: t().label },
+      { k: 'value_he', label: t().value, type: 'textarea' },
+      { k: 'start_date', label: t().from }, { k: 'place_text', label: t().place },
+    ],
+    add: (body) => api('POST', `/api/people/${encodeURIComponent(state.raw.id)}/fact`, body),
+  },
+  {
+    key: 'questions', title: t().questions, rows: () => state.raw.questions,
+    head: (r) => r.status,
+    sub: (r) => (L === 'en' ? r.question_en || r.question_he : r.question_he || r.question_en),
+    fields: [
+      { k: 'question_he', label: `${t().question} (${t().he})`, type: 'textarea' },
+      { k: 'question_en', label: `${t().question} (${t().en})`, type: 'textarea' },
+      { k: 'candidate_he', label: `${t().candidate} (${t().he})`, type: 'textarea' },
+      { k: 'next_step_he', label: `${t().nextStep} (${t().he})`, type: 'textarea' },
+      { k: 'status', label: t().status, type: 'select', opts: () => [['open', 'open'], ['answered', 'answered'], ['refuted', 'refuted']] },
+    ],
+    save: (r, body) => api('PATCH', `/api/questions/${r.id}`, body),
+    del: (r) => api('DELETE', `/api/questions/${r.id}`),
+    addFields: [{ k: 'question_he', label: t().question, type: 'textarea' }],
+    add: (body) => api('POST', `/api/people/${encodeURIComponent(state.raw.id)}/question`, body),
+  },
+  {
+    key: 'names', title: t().names, rows: () => state.raw.names,
+    head: (r) => r.value,
+    sub: (r) => [r.script, r.record_system, r.note].filter(Boolean).join(' · '),
+    // name_variants has an add and a delete route and no edit one — the table is
+    // append-only by design, so a mis-typed variant is deleted and re-added.
+    fields: [],
+    del: (r) => api('DELETE', `/api/names/${r.id}`),
+    addFields: [
+      { k: 'value', label: t().nameVal }, { k: 'script', label: t().script },
+      { k: 'record_system', label: t().recSys }, { k: 'note', label: t().note },
+    ],
+    add: (body) => api('POST', `/api/people/${encodeURIComponent(state.raw.id)}/name`, body),
+  },
+  {
+    key: 'documents', title: t().documents, rows: () => state.raw.documents,
+    head: (r) => r.title || r.file,
+    sub: (r) => [r.kind, r.source, r.note].filter(Boolean).join(' · '),
+    link: (r) => `/doc/${r.id}`,
+    fields: [
+      { k: 'title', label: t().titleF },
+      { k: 'kind', label: t().kind, type: 'select', opts: () => state.raw.vocab.docKinds.map((v) => [v, v]) },
+      { k: 'note', label: t().note, type: 'textarea' },
+      { k: 'source', label: t().source },
+    ],
+    save: (r, body) => api('PATCH', `/api/documents/${r.id}`, body),
+    del: (r) => api('DELETE', `/api/documents/${r.id}`),
+  },
+  {
+    key: 'photos', title: t().photos, rows: () => state.raw.photos,
+    head: (r) => r.caption || r.id,
+    sub: (r) => (r.is_avatar ? t().avatar : ''),
+    link: (r) => `/photo/${r.id}`,
+    fields: [],
+    del: (r) => api('DELETE', `/api/photo/${r.id}`),
+  },
+];
+
+function drawRowField(f, values, onChange) {
+  const wrap = el('div', { class: `field${f.type === 'textarea' ? ' wide' : ''}` });
+  wrap.append(el('label', { text: f.label }));
+  let node;
+  if (f.type === 'select') {
+    node = el('select', { class: 'input' });
+    for (const [v, text] of f.opts()) {
+      const o = el('option', { value: v, text });
+      if (String(v) === String(values[f.k] ?? '')) o.selected = true;
+      node.append(o);
+    }
+  } else if (f.type === 'textarea') {
+    node = el('textarea', { class: 'input' });
+    node.value = values[f.k] ?? '';
+  } else if (f.type === 'person') {
+    node = el('input', { class: 'input', list: 'people-list', autocomplete: 'off' });
+    node.value = values[f.k] ? personName(values[f.k]) : '';
+  } else {
+    node = el('input', { class: 'input', autocomplete: 'off' });
+    node.value = values[f.k] ?? '';
+  }
+  const read = () => {
+    if (f.type !== 'person') return node.value;
+    const m = node.value.trim().match(/#(\d+)\s*$/);
+    if (m) return state.people.find((p) => String(p.no) === m[1])?.id || node.value.trim();
+    return state.people.find((p) => personName(p.id) === node.value.trim())?.id || node.value.trim();
+  };
+  node.addEventListener('input', () => onChange(f.k, read()));
+  node.addEventListener('change', () => onChange(f.k, read()));
+  wrap.append(node);
+  return wrap;
+}
+
+/* Which child tables the reader has opened, kept across a redraw.
+   `run()` reloads the whole person after every write, so without this an edit
+   inside a collapsed card would slam it shut under the reader's hands. */
+const openSections = new Set();
+
+function drawSection(spec) {
+  const card = el('div', { class: 'card' });
+  const rows = spec.rows() || [];
+  const body = el('div');
+
+  /* COLLAPSED BY DEFAULT, and this is the whole lesson of the first version.
+     The subject of this page is the columns of `people`; the child tables are
+     this person's DATA — a well-documented person can carry thirty
+     `person_facts` rows holding a CV in two languages, several thousand
+     characters each. Rendered open and in full
+     they were a five-thousand-pixel wall in the middle of a schema editor, and
+     a fact labelled "Before software" read as a field somebody had invented.
+     A count and a chevron say what is in there without becoming the page. */
+  const open = openSections.has(spec.key);
+  const head = el('button', {
+    class: 'cardhead', type: 'button', 'aria-expanded': String(open),
+    onclick: () => {
+      const now = !openSections.has(spec.key);
+      if (now) openSections.add(spec.key); else openSections.delete(spec.key);
+      head.setAttribute('aria-expanded', String(now));
+      body.classList.toggle('hidden', !now);
+    },
+  }, [
+    el('span', { class: 'chev', text: '▸' }),
+    el('h2', { text: spec.title }),
+    el('span', { class: 'count', text: String(rows.length) }),
+  ]);
+  card.append(head, body);
+  body.classList.toggle('hidden', !open);
+
+  if (!rows.length) body.append(el('p', { class: 'note', text: t().empty, style: 'margin-top: 8px' }));
+
+  for (const r of rows) {
+    const box = el('div', { class: 'row' });
+    const sub = spec.sub ? clip(spec.sub(r)) : '';
+    const head2 = el('div', { class: 'head' }, [
+      // The id, so a row is unmistakably a row of a table and not a column of
+      // `people` — and so it can be named in a bug report.
+      el('span', { class: 'rid', text: `#${r.id}` }),
+      el('span', { class: 'grow' }, [
+        el('span', { class: 'rtitle' }, [
+          document.createTextNode(clip(spec.head(r), 70) || '—'),
+          ...(spec.tags ? spec.tags(r).map((x) => el('span', { class: 'tag', text: x })) : []),
+          ...(() => {
+            const pl = spec.place ? spec.place(r) : null;
+            if (!pl) return [];
+            // A town with no coordinates still links — as a search rather than a
+            // pin — and says so, so "no pin yet" is visible rather than implied.
+            return [el('a', {
+              class: `tag place${pl.exact ? '' : ' fuzzy'}`, href: pl.url,
+              target: '_blank', rel: 'noreferrer',
+              title: pl.exact ? pl.label : `${pl.label} — ${t().noPin}`,
+              onclick: (e) => e.stopPropagation(),
+              text: `📍 ${pl.label}`,
+            })];
+          })(),
+        ]),
+        sub ? el('span', { class: 'rsub', title: String(spec.sub(r) || ''), text: sub }) : null,
+      ]),
+      spec.link ? el('a', { class: 'btn btn-sm', href: spec.link(r), target: '_blank', rel: 'noreferrer', text: t().open }) : null,
+    ]);
+    const head = head2;
+    const rowBody = el('div', { class: 'body hidden' });
+    if (spec.fields.length) {
+      const pending = {};
+      const grid = el('div', { class: 'grid' });
+      for (const f of spec.fields) grid.append(drawRowField(f, r, (k, v) => { pending[k] = v; }));
+      if (spec.people) rowBody.append(drawFactPeople(r));
+      if (spec.links) rowBody.append(drawFactLinks(r));
+      rowBody.append(grid, el('div', { style: 'margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap' }, [
+        el('button', {
+          class: 'btn btn-sm btn-primary', type: 'button', text: t().save,
+          onclick: async (e) => { await run(e.target, () => spec.save(r, pending)); },
+        }),
+      ]));
+      head.append(el('button', {
+        class: 'btn btn-sm', type: 'button', text: '✎',
+        onclick: () => rowBody.classList.toggle('hidden'),
+      }));
+    }
+    if (spec.del) head.append(el('button', {
+      class: 'btn btn-sm btn-danger', type: 'button', text: t().del,
+      onclick: async (e) => {
+        if (!confirm(t().confirmDel)) return;
+        await run(e.target, () => spec.del(r));
+      },
+    }));
+    box.append(head, rowBody);
+    body.append(box);
+  }
+
+  if (spec.add) {
+    const draft = {};
+    const grid = el('div', { class: 'grid', style: 'margin-top: 8px' });
+    for (const f of spec.addFields) grid.append(drawRowField(f, {}, (k, v) => { draft[k] = v; }));
+    body.append(el('hr', { style: 'border: 0; border-top: 1px solid var(--color-divider); margin: 12px 0' }), grid,
+      el('button', {
+        class: 'btn btn-sm btn-primary', type: 'button', text: t().add,
+        style: 'margin-top: 8px',
+        onclick: async (e) => { await run(e.target, () => spec.add(draft)); },
+      }));
+  }
+  return card;
+}
+
+/* Who else is in this fact.
+   The subject is shown but cannot be removed here: it is `person_facts.person_id`,
+   the column 277 citations and every card query address the row by, and dropping
+   it out of the cast would leave a fact that belongs to nobody. Everyone else is
+   free to come and go. The whole list is sent on save, so removal is "send it
+   without them" rather than a second endpoint. */
+function drawFactPeople(r) {
+  const box = el('div', { class: 'sublist' });
+  box.append(el('h4', { text: `${t().people} (${r.people?.length || 0})` }));
+  const draft = (r.people || []).map((x) => ({ person_id: x.person_id, role: x.role }));
+  const list = el('div');
+  const redraw = () => {
+    list.replaceChildren();
+    for (const [i, pr] of draft.entries()) {
+      const isSubject = pr.role === 'subject';
+      list.append(el('div', { class: 'subrow' }, [
+        el('span', { class: 'grow', text: personName(pr.person_id) }),
+        isSubject
+          ? el('span', { class: 'tag', text: t().subject })
+          : el('input', { class: 'input', value: pr.role, 'aria-label': t().role,
+              style: 'max-width: 160px', oninput: (e) => { draft[i].role = e.target.value; } }),
+        isSubject ? null : el('button', {
+          class: 'btn btn-sm btn-danger', type: 'button', text: '×',
+          onclick: () => { draft.splice(i, 1); redraw(); },
+        }),
+      ]));
+    }
+  };
+  redraw();
+  const pick = el('input', { class: 'input', list: 'people-list', placeholder: t().addPerson, autocomplete: 'off' });
+  const roleBox = el('input', { class: 'input', placeholder: t().role, style: 'max-width: 160px' });
+  box.append(list, el('div', { class: 'subrow' }, [
+    pick, roleBox,
+    el('button', {
+      class: 'btn btn-sm', type: 'button', text: t().add,
+      onclick: async (e) => {
+        const m = pick.value.trim().match(/#(\d+)\s*$/);
+        const hit = m ? state.people.find((x) => String(x.no) === m[1])
+                      : state.people.find((x) => personName(x.id) === pick.value.trim());
+        if (!hit) return;
+        draft.push({ person_id: hit.id, role: roleBox.value.trim() || 'related' });
+        pick.value = ''; roleBox.value = '';
+        await run(e.target, () => api('PATCH', `/api/facts/${r.id}`, { people: draft }));
+      },
+    }),
+    el('button', {
+      class: 'btn btn-sm btn-primary', type: 'button', text: t().save,
+      onclick: async (e) => { await run(e.target, () => api('PATCH', `/api/facts/${r.id}`, { people: draft })); },
+    }),
+  ]));
+  return box;
+}
+
+/* What this fact has to do with other facts. Both directions are listed — what
+   it bears on and what bears on it — because an argument read from one end only
+   is half an argument. */
+function drawFactLinks(r) {
+  const box = el('div', { class: 'sublist' });
+  box.append(el('h4', { text: `${t().links} (${r.links?.length || 0})` }));
+  for (const l of r.links || []) {
+    box.append(el('div', { class: 'subrow' }, [
+      el('span', { class: 'tag', text: l.dir === 'out' ? `→ ${l.relation}` : `← ${l.relation}` }),
+      el('span', { class: 'grow', text: `#${l.other_id} ${clip(l.other_he || l.other_en, 50)}` }),
+      el('button', {
+        class: 'btn btn-sm btn-danger', type: 'button', text: '×',
+        onclick: async (e) => { await run(e.target, () => api('DELETE', `/api/fact-links/${l.id}`)); },
+      }),
+    ]));
+  }
+  const to = el('input', { class: 'input', placeholder: t().linkTo, inputmode: 'numeric', style: 'max-width: 140px' });
+  const rel = el('select', { class: 'input', style: 'max-width: 180px' });
+  for (const v of state.raw.vocab.factRelations) rel.append(el('option', { value: v, text: v }));
+  box.append(el('div', { class: 'subrow' }, [
+    to, rel,
+    el('button', {
+      class: 'btn btn-sm', type: 'button', text: t().add,
+      onclick: async (e) => {
+        if (!to.value.trim()) return;
+        await run(e.target, () => api('POST', `/api/facts/${r.id}/link`, { to_id: +to.value, relation: rel.value }));
+      },
+    }),
+  ]));
+  return box;
+}
+
+/** Run a write, show what it said, and redraw from the server's answer. */
+async function run(btn, fn) {
+  btn.disabled = true;
+  try {
+    await fn();
+    await load(state.raw.id);
+    refreshSaveBar(t().saved, 'msg-ok');
+  } catch (err) {
+    refreshSaveBar(err.message, 'msg-err');
+    btn.disabled = false;
+  }
+}
+
+/* ── the history panel ────────────────────────────────────────────────────── */
+
+function drawHistory() {
+  const card = el('div', { class: 'card' });
+  const open = openSections.has('history');
+  const body = el('div');
+  const head = el('button', {
+    class: 'cardhead', type: 'button', 'aria-expanded': String(open),
+    onclick: () => {
+      const now = !openSections.has('history');
+      if (now) openSections.add('history'); else openSections.delete('history');
+      head.setAttribute('aria-expanded', String(now));
+      body.classList.toggle('hidden', !now);
+    },
+  }, [
+    el('span', { class: 'chev', text: '▸' }),
+    el('h2', { text: t().history }),
+    el('span', { class: 'count', text: String(state.raw.history.length) }),
+  ]);
+  card.append(head, body);
+  body.classList.toggle('hidden', !open);
+  const ul = el('ul', { class: 'hist', style: 'list-style: none; margin: 8px 0 0; padding: 0' });
+  for (const c of state.raw.history) {
+    ul.append(el('li', { class: c.undone_by ? 'gone' : '' }, [
+      el('span', { class: 'when', text: new Date(c.ts * 1000).toLocaleString(L === 'en' ? 'en-GB' : 'he-IL') }),
+      el('span', { class: 'grow rsub', style: 'flex: 1 1 240px',
+        title: c.summary || '', text: clip(c.summary || (HE_KIND[c.kind] || c.kind), 110) }),
+      el('span', { class: 'sub', style: 'font-size: 12px; color: var(--color-neutral-500)', text: c.actor }),
+      c.undone_by
+        ? el('span', { class: 'pill', text: t().undone })
+        /* Offered to everyone and refused by the server for anyone but the
+           owner or the change's own author. Deciding that here as well would be
+           a second copy of the rule, and the copy that goes stale. */
+        : el('button', {
+            class: 'btn btn-sm', type: 'button', text: t().undo,
+            onclick: async (e) => { await run(e.target, () => api('POST', '/api/undo', { id: c.id })); },
+          }),
+    ]));
+  }
+  if (!state.raw.history.length) body.append(el('p', { class: 'note', text: t().empty }));
+  body.append(ul);
+  return card;
+}
+
+/* ── the whole sheet ──────────────────────────────────────────────────────── */
+
+function render() {
+  const sheet = $('sheet');
+  sheet.replaceChildren();
+  const r = state.raw;
+  if (!r) { refreshSaveBar(); return; }
+
+  const name = (L === 'en' ? r.nameEn || r.nameHe : r.nameHe || r.nameEn) || r.id;
+  sheet.append(el('div', { class: 'card' }, [
+    el('div', { class: 'head', style: 'display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap' }, [
+      el('h2', { text: name, style: 'flex: 1 1 auto' }),
+      r.no ? el('span', { class: 'pill', text: `#${r.no}` }) : null,
+      r.deleted ? el('span', { class: 'pill warn', text: t().removed }) : null,
+      el('a', { class: 'btn btn-sm', href: `/tree?p=${r.no || ''}`, text: t().open }),
+      el('button', {
+        class: `btn btn-sm ${r.deleted ? '' : 'btn-danger'}`, type: 'button',
+        text: r.deleted ? t().restore : t().remove,
+        onclick: async (e) => {
+          if (!r.deleted && !confirm(t().confirmPerson)) return;
+          await run(e.target, () => (r.deleted
+            ? api('POST', `/api/people/${encodeURIComponent(r.id)}/restore`)
+            : api('DELETE', `/api/people/${encodeURIComponent(r.id)}`)));
+        },
+      }),
+    ]),
+  ]));
+
+  for (const g of r.groups) {
+    const card = el('div', { class: 'card' });
+    card.append(el('h2', { text: L === 'en' ? g.en : g.he }));
+    const note = L === 'en' ? g.noteEn : g.noteHe;
+    if (note) card.append(el('p', { class: 'note', text: note }));
+    const grid = el('div', { class: 'grid' });
+    for (const f of g.fields) grid.append(drawField(f));
+    card.append(grid);
+    sheet.append(card);
+  }
+
+  for (const spec of SPECS()) sheet.append(drawSection(spec));
+  sheet.append(drawHistory());
+  refreshSaveBar();
+}
+
+/* ── boot ─────────────────────────────────────────────────────────────────── */
+
+(async () => {
+  applyLang();
+  const [me, people] = await Promise.all([
+    api('GET', '/api/me').catch(() => null),
+    api('GET', '/api/people'),
+  ]);
+  state.me = me;
+  state.people = people.people || [];
+  // Fed to every `list="people-list"` box on the page — parents, spouses, and
+  // the union add form — so the roster is downloaded once and not per field.
+  const dl = el('datalist', { id: 'people-list' });
+  for (const p of state.people) {
+    const he = `${p.first} ${p.last}`.trim();
+    const en = `${p.firstEn} ${p.lastEn}`.trim();
+    dl.append(el('option', { value: `${(L === 'en' ? en || he : he || en) || p.id}${p.no ? ` (#${p.no})` : ''}` }));
+  }
+  document.body.append(dl);
+
+  const want = new URL(location.href).searchParams.get('p');
+  if (want) await load(want);
+  else { $('introNote').textContent = `${t().intro} ${t().pick}`; $('find').focus(); }
+})().catch((err) => {
+  $('sheet').replaceChildren(el('div', { class: 'card' }, el('p', { class: 'msg-err', text: err.message })));
+});
+</script>
+</body>
+</html>

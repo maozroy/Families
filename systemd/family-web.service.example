@@ -1,0 +1,18 @@
+[Unit]
+Description=Family tree
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/family-tree
+Environment=HOST=127.0.0.1
+Environment=PORT=3011
+# Secrets (session key, OAuth client) belong in a 0600 root-owned file, NOT in
+# the unit: `systemctl cat` is readable by anyone. See .env.example.
+EnvironmentFile=/etc/family-web.env
+ExecStart=/usr/bin/node web/server.mjs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+# The data. Never in git: this repo is the software, not the family.
+family.db
+family.db-*
+*.db
+*.db-journal
+changes.log
+photos/
+documents/
+
+# This installation's own names, identity and secrets.
+config/seed-names.json
+.env
+*.env
+.dev-token
+
+# A commercially licensed font is referenced by the stylesheets but is not
+# redistributable — see NOTICE. Drop your own licensed copy in here.
+web/public/app/roobert-hebrew.woff2
+
+# Editing detritus.
+*.bak-*
+*.orig
+node_modules/

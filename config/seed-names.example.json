@@ -1,0 +1,8 @@
+{
+  "Levi":    ["לוי",   "Levi"],
+  "Cohen":   ["כהן",   "Cohen"],
+  "Mizrahi": ["מזרחי", "Mizrahi"],
+
+  "unconfirmed": ["לא מאומת", "unconfirmed"],
+  "other":       ["אחר",      "other"]
+}

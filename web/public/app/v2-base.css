@@ -1,0 +1,253 @@
+/* v2 foundation — the layer both v2 pages sit on.
+ *
+ * Loaded from <head>, which is BEFORE the design system's own <style> blocks.
+ * That would normally lose every fight, so the token overrides are written
+ * `:root:root` — the same element matched twice, which outranks a plain `:root`
+ * on specificity and makes load order stop mattering. It is a deliberate trick,
+ * not an accident, and it is what lets this file stay one shared file instead of
+ * a copy pasted into the bottom of each document.
+ *
+ * Nothing here knows about the tree or the map. Anything page-shaped lives in
+ * the page.
+ */
+
+/* ── the dark theme ──────────────────────────────────────────────────────────
+   Every colour the system draws is already a token, so a second theme is a
+   second set of token values and no rule anywhere else changes.
+
+   The two ramps INVERT rather than shift. `--color-neutral-100` is not "light
+   grey", it is *paper* — the thing a card is made of — and `--color-neutral-900`
+   is *ink*. Reading them that way, a toast (900 on 100 in the light theme) comes
+   out light-on-dark here without a single call site knowing there are two
+   themes. Shifting the ramp instead of inverting it would have given a dark page
+   with white cards on it. The same argument applies to the accent ramp, whose
+   700–900 steps are text colours and whose 100–200 steps are hover washes.
+
+   The hue is held throughout: this family's page is warm, and a dark theme that
+   goes blue-grey stops being the same product at night. */
+:root:root { color-scheme: light; }
+
+@media (prefers-color-scheme: dark) {
+  :root:root {
+    color-scheme: dark;
+
+    --color-bg: #17150f;
+    --color-surface: #221f17;
+    --color-text: #f0e7d6;
+    /* Lifted from the light theme's #c67139: the same hue needs more lightness
+       to hold its own against a near-black page, and it still takes --color-bg
+       as its text colour on a filled button. */
+    --color-accent: #d4834a;
+    --color-accent-2: #93a571;
+    --color-divider: color-mix(in srgb, #f0e7d6 17%, transparent);
+
+    --color-neutral-100: #262219;
+    --color-neutral-200: #2f2b20;
+    --color-neutral-300: #3d382b;
+    --color-neutral-400: #55503f;
+    --color-neutral-500: #736c57;
+    --color-neutral-600: #948c74;
+    --color-neutral-700: #b5ad94;
+    --color-neutral-800: #d5ceb8;
+    --color-neutral-900: #f0e9d8;
+
+    --color-accent-100: #33220f;
+    --color-accent-200: #452c14;
+    --color-accent-300: #5d3a19;
+    --color-accent-400: #7d4e21;
+    --color-accent-500: #a2662c;
+    --color-accent-600: #c5813f;
+    --color-accent-700: #e5a165;
+    --color-accent-800: #f2bd8b;
+    --color-accent-900: #f9d5b1;
+
+    --color-accent-2-100: #1f2616;
+    --color-accent-2-200: #2b331d;
+    --color-accent-2-300: #3b4529;
+    --color-accent-2-400: #4f5c37;
+    --color-accent-2-500: #68784a;
+    --color-accent-2-600: #83955f;
+    --color-accent-2-700: #a4b57c;
+    --color-accent-2-800: #c2d0a0;
+    --color-accent-2-900: #dde6c2;
+
+    /* The light theme's shadows are ink at 14–22% — on a near-black page they
+       are invisible, so elevation has to come from real darkness plus a hairline
+       the surface itself provides. The design's own token comment calls for
+       exactly this. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .55);
+    --shadow-md: 0 3px 10px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .04);
+    --shadow-lg: 0 12px 34px rgba(0, 0, 0, .7), 0 0 0 1px rgba(255, 255, 255, .05);
+  }
+
+  /* Photographs and map tiles are lit for a bright page. Knocking them back a
+     little stops a face or a street grid from being the only thing glowing in a
+     dark room, without the washed-out look of a full invert. */
+  :root:root img { filter: brightness(.92) contrast(1.02); }
+}
+
+/* ── the phone floors ────────────────────────────────────────────────────────
+   Three numbers, applied once, that the rest of the app inherits. */
+:root:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  /* One knob for "is this a phone". Pages read it rather than repeating the
+     breakpoint, so moving it moves everything at once. */
+  --tap: 44px;
+}
+
+/* iOS Safari zooms the whole page in when a focused field is under 16px, and
+   then leaves it zoomed. Every search box and every form field in v1 was 14px,
+   so tapping any of them lurched the page. This is the entire fix, and it has to
+   win against the inline `font: inherit` the components carry — hence the
+   doubled selector again. */
+:root:root input,
+:root:root textarea,
+:root:root select,
+:root:root .input,
+:root:root .search-input { font-size: max(16px, 1rem); }
+
+/* Nothing a finger has to hit is allowed under 44px in either direction. The
+   `.btn-icon`/`.icon-btn` classes carry explicit 36–40px widths inline, so this
+   sets the floor without disturbing anything already larger. */
+:root:root .btn-icon,
+:root:root .icon-btn,
+:root:root .filter-btn,
+:root:root .nav-seg > * { min-width: var(--tap); min-height: var(--tap); }
+
+/* Height only for the rest — these are wide already, and forcing a width floor
+   on a text button would stretch "Back" to a square. */
+:root:root .btn,
+:root:root .view-tab,
+:root:root .stat-chip,
+:root:root .rel-chip,
+:root:root .person-row,
+:root:root .combo-opt,
+:root:root .search-opt,
+:root:root .filter-row,
+:root:root .fam-toggle,
+:root:root .legend-head .grow,
+:root:root .sheet-title,
+:root:root .input,
+:root:root .search-input { min-height: var(--tap); }
+
+/* The branch chips on the tree page and the legend rows on the map are built
+   from inline styles in JS, so they carry their own padding and cannot be
+   reached by a class. They are laid out as flex rows either way. */
+:root:root .panel-scroll button[style*="border-radius: 999px"] { min-height: var(--tap); }
+
+/* The tree's own node buttons are exempt: they are a drawn diagram at a scale
+   the reader controls, not a toolbar, and forcing 44px on them would relayout
+   the tree. */
+:root:root .tree-vp button { min-width: 0; min-height: 0; }
+
+/* 10px and 11px text is everywhere in v1 — node subtitles, relation words,
+   avatar initials, the legend. This family includes its grandparents. 12px is
+   the floor, and the places that genuinely want to be quiet get there with
+   colour instead of size. */
+:root:root .rel-chip .rl,
+:root:root .rel-chip .av,
+:root:root .combo-n,
+:root:root .obar-legend,
+:root:root .legend-foot,
+:root:root .fam-toggle .n,
+:root:root .filter-btn .cnt,
+:root:root .filter-row .n,
+:root:root .search-opt .n,
+:root:root .search-opt .sub,
+:root:root .fam-toggle .nm,
+:root:root .fam-toggle,
+:root:root .filter-row,
+:root:root .pop-rel,
+:root:root .find-opt .sub { font-size: 12px; }
+/* The map legend's family names carry the same weight as the tree's branch
+   chips and deserve the same size. */
+:root:root .fam-toggle .nm { font-size: 13px; }
+
+/* `.tag` is the little pill on a person's card — "This is me", their number in
+   the tree, the family they married into. Facts, at 11px. */
+:root:root .tag { font-size: 12px; }
+
+/* A focus ring that survives both themes. v1 relies on the browser default,
+   which is a blue that belongs to neither palette. */
+:root:root :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Respect the system setting. The tree animates its relation path and the
+   panels rise on open; neither is load-bearing. */
+@media (prefers-reduced-motion: reduce) {
+  :root:root *, :root:root *::before, :root:root *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── the contact row ─────────────────────────────────────────────────────────
+   How to reach a person, on both pages: WhatsApp (built from the phone that has
+   been on the row since the contact seed), Instagram, Facebook, LinkedIn. Only
+   the ones this person actually has; a network nobody filled in draws nothing
+   rather than a greyed-out button that looks like a broken link.
+
+   Round, tap-sized, and tinted with the network's own colour rather than
+   labelled: four brand glyphs in a row read at a glance in either language,
+   which a row of four Hebrew words does not. The name and the handle are in
+   `title`/`aria-label`, so the keyboard and the screen reader still get words.
+
+   `--cbrand` is set per button in the inline style — one colour in, and the
+   border, the fill and the hover all follow from it. */
+:root:root .contact-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+:root:root .contact-btn {
+  display: inline-grid; place-items: center; flex: none; text-decoration: none;
+  width: var(--tap); height: var(--tap); min-width: var(--tap); min-height: var(--tap);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cbrand, currentColor) 45%, transparent);
+  background: color-mix(in srgb, var(--cbrand, currentColor) 12%, transparent);
+}
+:root:root .contact-btn:hover {
+  background: color-mix(in srgb, var(--cbrand, currentColor) 24%, transparent);
+  border-color: var(--cbrand, currentColor);
+}
+:root:root .contact-btn .ci {
+  width: 22px; height: 22px; display: block;
+  background-repeat: no-repeat; background-position: center; background-size: 22px 22px;
+}
+
+/* The wiki page, as an icon beside the person's name.
+
+   Smaller than a .contact-btn and in the accent colour rather than a brand one:
+   the contact buttons are a row of destinations you choose between, this is one
+   affordance attached to the name it sits next to. It still meets the tap
+   target through padding rather than through its own box, so it does not
+   push the name off a narrow screen.
+
+   The glyph is an open book — the one icon readers already associate with "an
+   article about this", and language-neutral, which a "W" is not. */
+:root:root .wiki-btn {
+  display: inline-grid; place-items: center; flex: none; text-decoration: none;
+  width: 30px; height: 30px; border-radius: 999px;
+  /* Sets currentColor for the masked glyph inside, as well as the link itself. */
+  color: var(--color-accent-800);
+  border: 1px solid color-mix(in srgb, var(--color-accent-800) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent-800) 10%, transparent);
+}
+:root:root .wiki-btn:hover {
+  background: color-mix(in srgb, var(--color-accent-800) 22%, transparent);
+  border-color: var(--color-accent-800);
+}
+:root:root .wiki-btn .wi {
+  width: 18px; height: 18px; display: block;
+  /* A mask, not a background-image: the glyph is then painted in
+     currentColor, so it follows the accent and the dark theme on its own.
+     A data-URI background would bake one stroke colour in and need a
+     second copy per theme. */
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7v13'/%3E%3Cpath d='M3 5.5A1.5 1.5 0 0 1 4.5 4H9a3 3 0 0 1 3 3 3 3 0 0 1 3-3h4.5A1.5 1.5 0 0 1 21 5.5v11a1.5 1.5 0 0 1-1.5 1.5H15a3 3 0 0 0-3 3 3 3 0 0 0-3-3H4.5A1.5 1.5 0 0 1 3 16.5z'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 7v13'/%3E%3Cpath d='M3 5.5A1.5 1.5 0 0 1 4.5 4H9a3 3 0 0 1 3 3 3 3 0 0 1 3-3h4.5A1.5 1.5 0 0 1 21 5.5v11a1.5 1.5 0 0 1-1.5 1.5H15a3 3 0 0 0-3 3 3 3 0 0 0-3-3H4.5A1.5 1.5 0 0 1 3 16.5z'/%3E%3C/svg%3E") center / 18px 18px no-repeat;
+}
