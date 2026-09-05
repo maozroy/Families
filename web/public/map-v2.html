@@ -2519,9 +2519,8 @@ function age(p) {
   if (m < 0 || (m === 0 && e.getDate() < b.getDate())) y--;
   return y >= 0 ? y : null;
 }
-/* No `relation_to_root` here any more: it is research bookkeeping written from
-   one person's point of view, in English, and the page computes real relations
-   for whoever is reading. It is not in the payload at all now. */
+/* No kinship in this line, and no stored column behind one either: the page
+   computes the real relation for whoever is reading, from relations.js. */
 function lifeLine(p) {
   var a = age(p), bits = [];
   if (p.born) bits.push(String(p.born).slice(0, 4) + (p.died ? '–' + String(p.died).slice(0, 4) : ''));
