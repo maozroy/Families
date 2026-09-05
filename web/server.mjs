@@ -69,6 +69,7 @@ import { listPlaces, listLifePlaces, listSettlements, listStreets, listAddresses
 import { normalize as normCountry } from '../lib/countries.mjs';
 import { isHex } from '../lib/colors.mjs';
 import { normalize as normalizeContact } from '../lib/contacts.mjs';
+import { graphFrom, relationBetween } from '../lib/relations.mjs';
 import {
   SERVICE_ACTOR, loadAuthConfig, hostOf, makeBanList, makeCfVerifier, maybeRoll,
   methodsFor, readSession, resolveIdentity,
@@ -89,14 +90,6 @@ const PORT = +(process.env.PORT || 3011);
  * signed in, with no dead end for the relative who has never opened the wiki.
  */
 const WIKI_ORIGIN = process.env.FAMILY_WIKI_ORIGIN ?? '';
-
-/* The person the tree is drawn around: generation 0, and what `relation_to_root`
- * is measured against. Configurable rather than baked in because this source is
- * public — an installation names its own root person, and no relative's name
- * belongs in the code. The Hebrew is concatenated after a prefixed lamed
- * ("קרבה ל" + name), so the value is a bare name, not a phrase. */
-const ROOT_NAME_HE = process.env.FAMILY_ROOT_NAME_HE || 'שורש העץ';
-const ROOT_NAME_EN = process.env.FAMILY_ROOT_NAME_EN || 'the root person';
 
 // Throws on a half-configured gate rather than starting one. Losing the service
 // is recoverable; running it with the lock only half on is not.
@@ -451,7 +444,7 @@ function clean(patch) {
         // so 'wiki, zeut' and 'wiki,zeut' stay one value and not two.
         v = String(v).split(',').map((x) => x.trim().toLowerCase()).filter(Boolean).join(',').slice(0, 120);
         break;
-      case 'branch': case 'relation_to_root': case 'dna_23andme':
+      case 'branch': case 'dna_23andme':
       case 'wiki_title_he': case 'wiki_title_en':
         v = String(v).replace(/\s+/g, ' ').slice(0, 200);
         break;
@@ -789,6 +782,31 @@ async function handle(req, res) {
 
   if (req.method === 'GET' && p === '/api/families')
     return json(res, 200, { families: ensureFamilies(db) });
+
+  /* How two people are related, worked out from the tree.
+   *
+   * This replaced a stored `relation_to_*` column. A column could only ever
+   * answer for ONE fixed person, was written by a script that had to be
+   * remembered after every edit, and drifted from the tree in between. The
+   * relation between two people is a pure function of the parent and spouse
+   * links; it is computed on demand, from the same calculator the pages use,
+   * so there is no second answer to keep in step.
+   *
+   * `a` and `b` are person numbers or slugs. `null` for `relation` is a real
+   * answer — the two are both in the tree with no path between them.
+   */
+  if (req.method === 'GET' && p === '/api/relation') {
+    const A = findPerson(url.searchParams.get('a'));
+    const B = findPerson(url.searchParams.get('b'));
+    if (!A || !B) return json(res, 404, { error: 'לא נמצא', error_en: 'No such person' });
+    const P = graphFrom(db.prepare('SELECT id,sex,father_id,mother_id,spouse_id,spouse_ex FROM people WHERE deleted_at IS NULL').all());
+    const rel = relationBetween(P, A.id, B.id);
+    return json(res, 200, {
+      a: { id: A.id, no: A.person_no, name: label(A) },
+      b: { id: B.id, no: B.person_no, name: label(B) },
+      relation: rel && { he: rel.he, en: rel.en, kind: rel.kind, gen: rel.gen, half: rel.half },
+    });
+  }
 
   if (req.method === 'GET' && p === '/api/origins')
     return json(res, 200, { origins: ensureOrigins(db), regions: ORIGIN_REGIONS });
@@ -1981,7 +1999,6 @@ const FIELD_LABEL = {
      change log reads "עודכן/ה: no_sync" — a column name, to a reader who has
      never seen a column. Every writable field belongs in this table. */
   branch: ['ענף', 'branch'], generation: ['דור', 'generation'],
-  relation_to_root: [`קרבה ל${ROOT_NAME_HE}`, `relation to ${ROOT_NAME_EN}`],
   source: ['מקורות', 'sources'], no_sync: ['ללא סנכרון מהמרשם', 'excluded from registry sync'],
   deceased: ['נפטר/ה', 'deceased'], dna_23andme: ['מזהה 23andMe', '23andMe profile'],
   lang: ['שפת ממשק', 'interface language'],
@@ -2020,7 +2037,7 @@ const ADVANCED_GROUPS = [
   { key: 'structure', he: 'מבנה העץ', en: 'Tree structure',
     note_he: 'איך העץ מצייר את האדם הזה — הצבע, השורה, ומה שכתוב עליו בוויקי.',
     note_en: 'How the tree draws this person — the colour, the row, and what the wiki says about them.',
-    fields: ['branch', 'generation', 'relation_to_root', 'source', 'no_sync',
+    fields: ['branch', 'generation', 'source', 'no_sync',
              'wiki_title_he', 'wiki_title_en', 'dna_23andme'] },
   { key: 'address', he: 'כתובת', en: 'Address',
     note_he: 'הכתובת הנוכחית — ריקה עבור מי שנפטר.',

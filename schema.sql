@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS people (
   father_id        TEXT REFERENCES people(id),
   mother_id        TEXT REFERENCES people(id),
   spouse_id        TEXT REFERENCES people(id),
-  relation_to_root TEXT NOT NULL DEFAULT '',
   branch           TEXT NOT NULL DEFAULT '',
   generation       INTEGER,            -- relative to the root person: 0 = their own, +1 children, -1 parents
   tz               TEXT NOT NULL DEFAULT '',   -- ת.ז., 9 digits, zero-padded

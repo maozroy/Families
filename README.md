@@ -47,13 +47,32 @@ unit.
 | Variable | What it decides |
 |---|---|
 | `FAMILY_OWNER_EMAIL` | The owner account. Required; there is no default. |
-| `FAMILY_ROOT_NAME_HE` / `_EN` | The person the tree is drawn around — generation 0, and what `relation_to_root` is measured against. |
 | `FAMILY_OWNER_NAME_HE` / `_EN` | Who a stuck relative is told to contact. |
 | `config/seed-names.json` | Hebrew and English display names per branch. Only a seed: once a family row exists, the database wins. |
 
-`people.relation_to_root` and `people.generation` are both measured from the
-root person. `generation` is blank for anyone unplaced, and stored as NULL
-rather than 0, because 0 is the root person's own row.
+### Kinship is computed, never stored
+
+How two people are related is a pure function of the parent and spouse links,
+so it is worked out on demand and kept in no column:
+
+```
+GET /api/relation?a=<no|slug>&b=<no|slug>
+  → { relation: { en: "first cousin once removed", he: "בן דוד בהסרה אחת",
+                  kind: "cousin", gen: -1, half: false } }
+```
+
+`relation: null` is a real answer — both people are in the tree with no path
+between them. There is ONE calculator, `web/public/app/relations.js`: the pages
+load it as a script, and Node imports it through `lib/relations.mjs`. Do not
+write a second one. This used to be a `relation_to_root` column that a script
+wrote from that very calculator, and a cache of a pure function is a thing that
+goes stale — it had to be re-run by hand after every edit, and in between it
+disagreed with the tree it described.
+
+`people.generation` remains, and is the one root-relative field: it is layout,
+deciding which row of the drawing a person sits on. The calculator ignores it
+and derives its own. It is blank for anyone unplaced, and stored as NULL rather
+than 0, because 0 is the root person's own row.
 
 ## Layout
 
